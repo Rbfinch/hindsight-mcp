@@ -143,13 +143,19 @@ Arguments:
 
 ### `hindsight_failing_tests`
 
-Get currently failing tests from recent test runs.
+Get currently failing tests from recent test runs, optionally filtered by commit.
 
 ```
 Arguments:
   limit (integer): Maximum tests to return (default: 50)
   workspace (string): Filter by workspace (optional)
+  commit (string): Filter by commit SHA - full or partial (optional)
 ```
+
+**Example queries:**
+- All failing tests: `hindsight_failing_tests()`
+- For a specific commit: `hindsight_failing_tests(commit: "a566594")`
+- Combined filters: `hindsight_failing_tests(workspace: "/path/to/project", commit: "abc123")`
 
 ### `hindsight_activity_summary`
 
@@ -226,6 +232,7 @@ After ingesting test results, query for failures using the MCP tool or Copilot:
 "What tests are failing?"
 "Show me the failing test output"
 "Which tests failed in the last run?"
+"What tests failed for commit abc123?"
 ```
 
 The `hindsight_failing_tests` tool returns:
@@ -233,6 +240,73 @@ The `hindsight_failing_tests` tool returns:
 - Duration and timestamp
 - Failure output (panic messages, assertion errors)
 - Associated commit SHA (if linked)
+
+#### Complete Workflow: Linking Tests to Commits
+
+This workflow demonstrates ingesting test results linked to a specific commit, then querying those failures:
+
+**Step 1: Get the current commit SHA**
+```bash
+git rev-parse HEAD
+# Output: a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6
+```
+
+**Step 2: Run tests and ingest with commit linkage**
+```bash
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
+  hindsight-mcp --workspace /path/to/project ingest --tests --commit a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6
+```
+
+Output:
+```
+Ingested 6 test results in 1 test run(s)
+```
+
+**Step 3: Query failing tests for that commit**
+
+Using the MCP tool (via Copilot or directly):
+```
+hindsight_failing_tests(commit: "a5665945")
+```
+
+Returns failures linked to that specific commit:
+```json
+[
+  {
+    "commit_sha": "a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6",
+    "full_name": "test_assertion_failure",
+    "duration_ms": 8,
+    "output_json": "assertion `left == right` failed: left: 2, right: 3"
+  },
+  {
+    "commit_sha": "a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6",
+    "full_name": "test_panic_failure",
+    "duration_ms": 8,
+    "output_json": "panicked at: This test panics on purpose"
+  }
+]
+```
+
+**Step 4: View commit details with linked test runs**
+```
+hindsight_commit_details(sha: "a5665945")
+```
+
+Returns commit info including all associated test runs:
+```json
+{
+  "sha": "a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6",
+  "message": "feat: add commit filter to hindsight_failing_tests",
+  "test_runs": [
+    { "passed": 2, "failed": 4, "timestamp": "2026-01-17T23:38:43Z" }
+  ]
+}
+```
+
+This enables powerful queries like:
+- "Which commit introduced these test failures?"
+- "Did the tests pass after this fix?"
+- "Show me all failures from yesterday's commits"
 
 ### GitHub Copilot Sessions
 
