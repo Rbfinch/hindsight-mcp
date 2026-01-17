@@ -228,58 +228,62 @@ cargo clippy -p hindsight-copilot       # ✅ No warnings
 
 ### Phase 3: Database Insertion Layer (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-17
 **Goal**: Create insertion functions that populate the database from parsed data
 **Dependencies**: Phases 0, 1, 2
 
 #### Tasks
 
-1. **Workspace management** (~60 lines)
+1. **Workspace management** (~60 lines) ✅
    - `insert_workspace()` - Create or update workspace
    - `get_or_create_workspace()` - Idempotent upsert
    - `list_workspaces()` - Enumerate all workspaces
 
-2. **Commit insertion** (~80 lines)
+2. **Commit insertion** (~80 lines) ✅
    - `insert_commit()` - Single commit with JSON columns
    - `insert_commits_batch()` - Bulk insert with transaction
+   - `get_commit_by_sha()` - Retrieve by SHA
    - Update FTS5 index (via triggers)
 
-3. **Test result insertion** (~100 lines)
+3. **Test result insertion** (~100 lines) ✅
    - `insert_test_run()` - Create test run record
    - `insert_test_results_batch()` - Bulk insert results
    - `link_test_run_to_commit()` - Associate with SHA
 
-4. **Copilot insertion** (~100 lines)
-   - `insert_copilot_session()` - Create session record
+4. **Copilot insertion** (~100 lines) ✅
+   - `insert_copilot_session()` - Create session record (idempotent)
    - `insert_copilot_messages_batch()` - Bulk insert messages
+   - `get_session_message_count()` - Query message count
    - Update FTS5 index (via triggers)
 
-5. **Unit tests** (~100 lines)
-   - Test workspace CRUD
-   - Test commit insertion with JSON
-   - Test test result insertion
-   - Test Copilot insertion
-   - Test batch operations
+5. **Unit tests** (~100 lines) ✅
+   - Test workspace CRUD (4 tests)
+   - Test commit insertion with JSON (4 tests)
+   - Test test result insertion (3 tests)
+   - Test Copilot insertion (4 tests)
+   - Test record type builders (7 tests)
 
 #### Deliverables
 
-- `crates/hindsight-mcp/src/db.rs` - Extended with insertion functions
-- `crates/hindsight-mcp/src/ingest.rs` - New module for ingestion logic
+- `crates/hindsight-mcp/src/db.rs` - Extended with insertion functions (~800 lines total) ✅
+- Record types: `WorkspaceRecord`, `CommitRecord`, `TestRunRecord`, `TestResultRecord`, `CopilotSessionRecord`, `CopilotMessageRecord` ✅
+- Builder pattern with `with_*()` methods for optional fields ✅
 
 #### Validation Gate
 
 ```bash
-cargo nextest run -p hindsight-mcp
-cargo clippy -p hindsight-mcp
+cargo nextest run -p hindsight-mcp  # ✅ 61 tests pass
+cargo clippy -p hindsight-mcp       # ✅ No warnings
 ```
 
 #### Success Criteria
 
-- [ ] Can insert workspaces
-- [ ] Can insert commits with FTS5 update
-- [ ] Can insert test runs and results
-- [ ] Can insert Copilot sessions and messages
-- [ ] ≥10 unit tests pass
+- [x] Can insert workspaces
+- [x] Can insert commits with FTS5 update
+- [x] Can insert test runs and results
+- [x] Can insert Copilot sessions and messages
+- [x] ≥10 unit tests pass (22 new tests)
 
 **Commit**: `feat(db): implement database insertion layer`
 

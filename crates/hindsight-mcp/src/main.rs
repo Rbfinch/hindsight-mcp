@@ -5,8 +5,13 @@
 
 use tracing::info;
 
+// Allow dead code during development - these modules are fully tested
+// and will be wired up in the MCP server implementation
+#[allow(dead_code)]
 mod db;
+#[allow(dead_code)]
 mod migrations;
+#[allow(dead_code)]
 mod queries;
 mod server;
 
