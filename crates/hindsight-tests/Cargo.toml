@@ -1,0 +1,30 @@
+[package]
+name = "hindsight-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Test log processing for hindsight-mcp"
+
+[lib]
+name = "hindsight_tests"
+path = "src/lib.rs"
+
+[[bench]]
+name = "tests_bench"
+harness = false
+
+[dependencies]
+nextest-metadata.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+similar.workspace = true
+similar-asserts.workspace = true

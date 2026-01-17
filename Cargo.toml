@@ -1,0 +1,62 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hindsight-mcp",
+    "crates/hindsight-git",
+    "crates/hindsight-tests",
+    "crates/hindsight-copilot",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/your-org/hindsight-mcp"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Internal crates
+hindsight-git = { path = "crates/hindsight-git" }
+hindsight-tests = { path = "crates/hindsight-tests" }
+hindsight-copilot = { path = "crates/hindsight-copilot" }
+
+# Error handling
+thiserror = "2.0.17"
+
+# Testing & benchmarking
+criterion = "0.8.1"
+proptest = "1.9.0"
+similar = "2.7.0"
+similar-asserts = "1.7.0"
+
+# Date/time
+chrono = { version = "0.4.39", features = ["serde"] }
+
+# Directory paths
+dirs = "6.0"
+
+# Structured logging/tracing
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+
+# Serialization
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.135"
+
+# MCP SDK
+rust-mcp-sdk = { version = "0.2", default-features = false, features = [
+    "server",
+    "hyper-server",
+] }
+
+# SQLite
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+
+# Git
+git2 = "0.20.3"
+
+# LSP types for Copilot log parsing
+lsp-types = "0.97.0"
+
+# Nextest for test result parsing
+nextest-metadata = "0.13.0"

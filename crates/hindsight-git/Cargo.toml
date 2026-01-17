@@ -1,0 +1,30 @@
+[package]
+name = "hindsight-git"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Git log processing for hindsight-mcp"
+
+[lib]
+name = "hindsight_git"
+path = "src/lib.rs"
+
+[[bench]]
+name = "git_bench"
+harness = false
+
+[dependencies]
+git2.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+similar.workspace = true
+similar-asserts.workspace = true

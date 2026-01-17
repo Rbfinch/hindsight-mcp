@@ -1,0 +1,19 @@
+[package]
+name = "hindsight-git-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+hindsight-git = { path = ".." }
+
+[[bin]]
+name = "fuzz_git_parser"
+path = "fuzz_targets/fuzz_git_parser.rs"
+test = false
+doc = false
+bench = false
