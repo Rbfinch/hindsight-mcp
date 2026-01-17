@@ -1,0 +1,51 @@
+{
+    "test-count": 5,
+    "rust-suites": {
+        "hindsight-git": {
+            "package": {
+                "id": "hindsight-git 0.1.0 (path+file:///workspace/crates/hindsight-git)",
+                "name": "hindsight-git",
+                "version": "0.1.0"
+            },
+            "binary-name": "hindsight_git",
+            "kind": "lib",
+            "test-cases": {
+                "commit::tests::test_is_valid_sha": {
+                    "ignored": false,
+                    "filter-match": {
+                        "status": "matches"
+                    }
+                },
+                "commit::tests::test_short_sha": {
+                    "ignored": false,
+                    "filter-match": {
+                        "status": "matches"
+                    }
+                }
+            }
+        },
+        "hindsight-tests": {
+            "package": {
+                "id": "hindsight-tests 0.1.0 (path+file:///workspace/crates/hindsight-tests)",
+                "name": "hindsight-tests",
+                "version": "0.1.0"
+            },
+            "binary-name": "hindsight_tests",
+            "kind": "lib",
+            "test-cases": {
+                "result::tests::test_passed_returns_true": {
+                    "ignored": false,
+                    "filter-match": {
+                        "status": "matches"
+                    }
+                },
+                "result::tests::test_failed_returns_true": {
+                    "ignored": true,
+                    "filter-match": {
+                        "status": "matches"
+                    }
+                }
+            }
+        }
+    }
+}

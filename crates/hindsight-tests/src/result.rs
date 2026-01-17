@@ -233,8 +233,8 @@ mod property_tests {
     /// Strategy to generate test names in the format "crate::module::test_fn"
     fn test_name_strategy() -> impl Strategy<Value = String> {
         (
-            "[a-z_]{1,20}",  // crate name
-            "[a-z_]{1,20}",  // module name
+            "[a-z_]{1,20}", // crate name
+            "[a-z_]{1,20}", // module name
             "[a-z_]{1,30}", // test function name
         )
             .prop_map(|(crate_name, module, test_fn)| {
@@ -247,9 +247,9 @@ mod property_tests {
         (
             test_name_strategy(),
             outcome_strategy(),
-            0u64..1_000_000u64,          // duration_ms
-            0i64..2_000_000_000i64,       // timestamp as unix seconds
-            proptest::option::of(".*"),   // output
+            0u64..1_000_000u64,         // duration_ms
+            0i64..2_000_000_000i64,     // timestamp as unix seconds
+            proptest::option::of(".*"), // output
         )
             .prop_map(|(name, outcome, duration_ms, ts, output)| {
                 let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());

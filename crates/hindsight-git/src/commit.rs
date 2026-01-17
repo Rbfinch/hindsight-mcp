@@ -206,10 +206,10 @@ mod property_tests {
     fn commit_strategy() -> impl Strategy<Value = Commit> {
         (
             sha_strategy(),
-            ".*",                    // message
-            "[A-Za-z ]{1,50}",       // author name
-            "[a-z]+@[a-z]+\\.[a-z]+", // author email
-            0i64..2_000_000_000i64,  // timestamp as unix seconds
+            ".*",                                            // message
+            "[A-Za-z ]{1,50}",                               // author name
+            "[a-z]+@[a-z]+\\.[a-z]+",                        // author email
+            0i64..2_000_000_000i64,                          // timestamp as unix seconds
             proptest::collection::vec(sha_strategy(), 0..3), // parents
         )
             .prop_map(|(sha, message, author, author_email, ts, parents)| {
