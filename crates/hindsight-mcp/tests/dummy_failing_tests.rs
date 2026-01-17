@@ -31,13 +31,16 @@ fn test_expected_vs_actual_mismatch() {
 }
 
 #[test]
+#[allow(clippy::assertions_on_constants)]
 fn test_that_also_passes() {
+    // Intentionally trivial assertion for dummy test
     assert!(true);
 }
 
 #[test]
+#[allow(clippy::unnecessary_literal_unwrap)]
 fn test_option_unwrap_failure() {
-    // This test fails on unwrap
+    // This test intentionally fails on unwrap
     let value: Option<i32> = None;
     let _ = value.expect("Expected a value but got None!");
 }

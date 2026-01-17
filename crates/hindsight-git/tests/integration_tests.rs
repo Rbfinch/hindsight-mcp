@@ -68,7 +68,7 @@ fn test_commit_chain_traversal() {
     let repo = Repository::open(&repo_path).expect("Failed to open git repository");
 
     let head = repo.head().expect("Failed to get HEAD");
-    let head_commit = head.peel_to_commit().expect("Failed to get HEAD commit");
+    let _head_commit = head.peel_to_commit().expect("Failed to get HEAD commit");
 
     // Walk the commit history (up to 10 commits for test speed)
     let mut revwalk = repo.revwalk().expect("Failed to create revwalk");

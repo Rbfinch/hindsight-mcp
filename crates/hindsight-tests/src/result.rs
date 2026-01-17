@@ -252,7 +252,7 @@ mod property_tests {
             proptest::option::of(".*"), // output
         )
             .prop_map(|(name, outcome, duration_ms, ts, output)| {
-                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
+                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now);
                 TestResult {
                     name,
                     outcome,

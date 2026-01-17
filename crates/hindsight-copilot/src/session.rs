@@ -1214,7 +1214,7 @@ mod property_tests {
             proptest::collection::vec(variable_strategy(), 0..3), // variables
         )
             .prop_map(|(role, content, ts, agent, variables)| {
-                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
+                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now);
                 ChatMessage {
                     role,
                     content,
@@ -1239,7 +1239,7 @@ mod property_tests {
             proptest::collection::vec(message_strategy(), 0..10), // messages
         )
             .prop_map(|(id, workspace_id, ts, messages)| {
-                let created_at = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
+                let created_at = DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now);
                 let mut session = ChatSession::new(id, workspace_id, created_at);
                 for msg in messages {
                     session.add_message(msg);

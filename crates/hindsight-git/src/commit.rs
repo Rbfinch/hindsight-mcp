@@ -213,7 +213,7 @@ mod property_tests {
             proptest::collection::vec(sha_strategy(), 0..3), // parents
         )
             .prop_map(|(sha, message, author, author_email, ts, parents)| {
-                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
+                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(Utc::now);
                 Commit {
                     sha,
                     message,
@@ -249,7 +249,7 @@ mod property_tests {
         fn prop_short_sha_length(commit in commit_strategy()) {
             let short = commit.short_sha();
             prop_assert!(short.len() <= 7);
-            prop_assert!(short.len() >= 1);
+            prop_assert!(!short.is_empty());
         }
 
         /// Property: is_merge is true iff parents.len() > 1
