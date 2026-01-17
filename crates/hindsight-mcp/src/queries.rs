@@ -72,13 +72,53 @@ pub struct FailingTest {
     pub started_at: String,
 }
 
+/// Get workspace ID from a workspace path
+///
+/// The workspace filter can be either a workspace ID (UUID) or a filesystem path.
+/// This function looks up the path in the workspaces table to find the corresponding ID.
+/// If the filter doesn't match a path, it's assumed to be a workspace ID and returned as-is.
+///
+/// # Arguments
+///
+/// * `conn` - Database connection
+/// * `filter` - Workspace ID or path to resolve
+///
+/// # Returns
+///
+/// The workspace ID, or None if the path doesn't exist and wasn't a valid ID.
+fn resolve_workspace_filter(conn: &Connection, filter: &str) -> Result<Option<String>, QueryError> {
+    // First, try to look up by path
+    let result: Result<String, _> = conn.query_row(
+        "SELECT id FROM workspaces WHERE path = ?",
+        [filter],
+        |row| row.get(0),
+    );
+
+    match result {
+        Ok(id) => Ok(Some(id)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            // Not a path - check if it's a valid workspace ID
+            let exists: Result<i64, _> =
+                conn.query_row("SELECT 1 FROM workspaces WHERE id = ?", [filter], |row| {
+                    row.get(0)
+                });
+            match exists {
+                Ok(_) => Ok(Some(filter.to_string())),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(QueryError::Sqlite(e)),
+            }
+        }
+        Err(e) => Err(QueryError::Sqlite(e)),
+    }
+}
+
 /// Query the timeline view for recent activity
 ///
 /// # Arguments
 ///
 /// * `conn` - Database connection
 /// * `limit` - Maximum number of events to return
-/// * `workspace_filter` - Optional workspace ID to filter by
+/// * `workspace_filter` - Optional workspace path or ID to filter by
 ///
 /// # Errors
 ///
@@ -90,7 +130,13 @@ pub fn get_timeline(
 ) -> Result<Vec<TimelineEvent>, QueryError> {
     let mut events = Vec::new();
 
-    if let Some(workspace_id) = workspace_filter {
+    // Resolve workspace filter (path or ID) to workspace ID
+    let resolved_workspace_id = match workspace_filter {
+        Some(filter) => resolve_workspace_filter(conn, filter)?,
+        None => None,
+    };
+
+    if let Some(workspace_id) = resolved_workspace_id {
         let mut stmt = conn.prepare(
             r#"
             SELECT event_type, event_id, workspace_id, event_timestamp, summary, details_json
@@ -297,7 +343,7 @@ pub fn search_all(
 ///
 /// * `conn` - Database connection
 /// * `limit` - Maximum number of results
-/// * `workspace_filter` - Optional workspace ID to filter by (via test_runs)
+/// * `workspace_filter` - Optional workspace path or ID to filter by (via test_runs)
 ///
 /// # Errors
 ///
@@ -309,10 +355,16 @@ pub fn get_failing_tests(
 ) -> Result<Vec<FailingTest>, QueryError> {
     let mut tests = Vec::new();
 
+    // Resolve workspace filter (path or ID) to workspace ID
+    let resolved_workspace_id = match workspace_filter {
+        Some(filter) => resolve_workspace_filter(conn, filter)?,
+        None => None,
+    };
+
     // The failing_tests view columns are:
     // test_name (from tr.id), suite_name, full_name (from tr.test_name),
     // duration_ms, output_json, run_id, commit_sha, started_at
-    if let Some(workspace_id) = workspace_filter {
+    if let Some(workspace_id) = resolved_workspace_id {
         let mut stmt = conn.prepare(
             r#"
             SELECT ft.test_name, ft.suite_name, ft.full_name, ft.duration_ms,
@@ -723,5 +775,111 @@ mod tests {
         assert_eq!(tests.len(), 1);
         assert_eq!(tests[0].suite_name, "hindsight-mcp");
         assert_eq!(tests[0].full_name, "test_something");
+    }
+
+    #[test]
+    fn test_resolve_workspace_filter_by_path() {
+        let conn = setup_db();
+
+        // Insert a workspace
+        conn.execute(
+            "INSERT INTO workspaces (id, name, path, created_at, updated_at) VALUES ('ws-123', 'test', '/test/workspace', datetime('now'), datetime('now'))",
+            [],
+        )
+        .expect("insert workspace");
+
+        // Resolve by path should return the workspace ID
+        let result = resolve_workspace_filter(&conn, "/test/workspace").expect("resolve");
+        assert_eq!(result, Some("ws-123".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_workspace_filter_by_id() {
+        let conn = setup_db();
+
+        // Insert a workspace
+        conn.execute(
+            "INSERT INTO workspaces (id, name, path, created_at, updated_at) VALUES ('ws-456', 'test', '/another/path', datetime('now'), datetime('now'))",
+            [],
+        )
+        .expect("insert workspace");
+
+        // Resolve by ID should return the same ID
+        let result = resolve_workspace_filter(&conn, "ws-456").expect("resolve");
+        assert_eq!(result, Some("ws-456".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_workspace_filter_not_found() {
+        let conn = setup_db();
+
+        // Resolve non-existent path or ID should return None
+        let result = resolve_workspace_filter(&conn, "/nonexistent/path").expect("resolve");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_timeline_with_workspace_path_filter() {
+        let conn = setup_db();
+
+        // Insert a workspace with a specific path
+        conn.execute(
+            "INSERT INTO workspaces (id, name, path, created_at, updated_at) VALUES ('ws-1', 'test', '/my/workspace', datetime('now'), datetime('now'))",
+            [],
+        )
+        .expect("insert workspace");
+
+        // Insert a commit for this workspace
+        conn.execute(
+            r#"
+            INSERT INTO commits (id, workspace_id, sha, message, author, timestamp, created_at)
+            VALUES ('c-1', 'ws-1', 'abc123def456789012345678901234567890abcd', 'Test commit', 'Author', datetime('now'), datetime('now'))
+            "#,
+            [],
+        )
+        .expect("insert commit");
+
+        // Get timeline filtered by path (not ID) - this tests the bug fix
+        let events = get_timeline(&conn, 10, Some("/my/workspace")).expect("timeline");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "commit");
+        assert_eq!(events[0].workspace_id, "ws-1");
+    }
+
+    #[test]
+    fn test_failing_tests_with_workspace_path_filter() {
+        let conn = setup_db();
+
+        // Insert a workspace with a specific path
+        conn.execute(
+            "INSERT INTO workspaces (id, name, path, created_at, updated_at) VALUES ('ws-1', 'test', '/my/workspace', datetime('now'), datetime('now'))",
+            [],
+        )
+        .expect("insert workspace");
+
+        // Insert a test run
+        conn.execute(
+            r#"
+            INSERT INTO test_runs (id, workspace_id, started_at, passed_count, failed_count, ignored_count)
+            VALUES ('tr-1', 'ws-1', datetime('now'), 5, 1, 0)
+            "#,
+            [],
+        )
+        .expect("insert test run");
+
+        // Insert a failing test
+        conn.execute(
+            r#"
+            INSERT INTO test_results (id, run_id, suite_name, test_name, outcome, duration_ms, created_at)
+            VALUES ('r-1', 'tr-1', 'my-crate', 'test_fails', 'failed', 100, datetime('now'))
+            "#,
+            [],
+        )
+        .expect("insert test result");
+
+        // Get failing tests filtered by path (not ID) - this tests the bug fix
+        let tests = get_failing_tests(&conn, 10, Some("/my/workspace")).expect("failing tests");
+        assert_eq!(tests.len(), 1);
+        assert_eq!(tests[0].suite_name, "my-crate");
     }
 }
