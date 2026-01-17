@@ -344,6 +344,7 @@ pub fn search_all(
 /// * `conn` - Database connection
 /// * `limit` - Maximum number of results
 /// * `workspace_filter` - Optional workspace path or ID to filter by (via test_runs)
+/// * `commit_filter` - Optional commit SHA (full or partial) to filter by
 ///
 /// # Errors
 ///
@@ -352,6 +353,7 @@ pub fn get_failing_tests(
     conn: &Connection,
     limit: usize,
     workspace_filter: Option<&str>,
+    commit_filter: Option<&str>,
 ) -> Result<Vec<FailingTest>, QueryError> {
     let mut tests = Vec::new();
 
@@ -361,64 +363,134 @@ pub fn get_failing_tests(
         None => None,
     };
 
+    // Build query based on filters
     // The failing_tests view columns are:
     // test_name (from tr.id), suite_name, full_name (from tr.test_name),
     // duration_ms, output_json, run_id, commit_sha, started_at
-    if let Some(workspace_id) = resolved_workspace_id {
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT ft.test_name, ft.suite_name, ft.full_name, ft.duration_ms,
-                   ft.output_json, ft.run_id, ft.commit_sha, ft.started_at
-            FROM failing_tests ft
-            JOIN test_runs tr ON tr.id = ft.run_id
-            WHERE tr.workspace_id = ?
-            ORDER BY ft.started_at DESC
-            LIMIT ?
-            "#,
-        )?;
+    match (resolved_workspace_id, commit_filter) {
+        (Some(workspace_id), Some(commit)) => {
+            // Filter by both workspace and commit
+            let commit_pattern = format!("{}%", commit);
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT ft.test_name, ft.suite_name, ft.full_name, ft.duration_ms,
+                       ft.output_json, ft.run_id, ft.commit_sha, ft.started_at
+                FROM failing_tests ft
+                JOIN test_runs tr ON tr.id = ft.run_id
+                WHERE tr.workspace_id = ? AND ft.commit_sha LIKE ?
+                ORDER BY ft.started_at DESC
+                LIMIT ?
+                "#,
+            )?;
 
-        let rows = stmt.query_map(params![workspace_id, limit as i64], |row| {
-            Ok(FailingTest {
-                test_name: row.get(0)?,
-                suite_name: row.get(1)?,
-                full_name: row.get(2)?,
-                duration_ms: row.get(3)?,
-                output_json: row.get(4)?,
-                run_id: row.get(5)?,
-                commit_sha: row.get(6)?,
-                started_at: row.get(7)?,
-            })
-        })?;
+            let rows =
+                stmt.query_map(params![workspace_id, commit_pattern, limit as i64], |row| {
+                    Ok(FailingTest {
+                        test_name: row.get(0)?,
+                        suite_name: row.get(1)?,
+                        full_name: row.get(2)?,
+                        duration_ms: row.get(3)?,
+                        output_json: row.get(4)?,
+                        run_id: row.get(5)?,
+                        commit_sha: row.get(6)?,
+                        started_at: row.get(7)?,
+                    })
+                })?;
 
-        for row in rows {
-            tests.push(row?);
+            for row in rows {
+                tests.push(row?);
+            }
         }
-    } else {
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT test_name, suite_name, full_name, duration_ms,
-                   output_json, run_id, commit_sha, started_at
-            FROM failing_tests
-            ORDER BY started_at DESC
-            LIMIT ?
-            "#,
-        )?;
+        (Some(workspace_id), None) => {
+            // Filter by workspace only
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT ft.test_name, ft.suite_name, ft.full_name, ft.duration_ms,
+                       ft.output_json, ft.run_id, ft.commit_sha, ft.started_at
+                FROM failing_tests ft
+                JOIN test_runs tr ON tr.id = ft.run_id
+                WHERE tr.workspace_id = ?
+                ORDER BY ft.started_at DESC
+                LIMIT ?
+                "#,
+            )?;
 
-        let rows = stmt.query_map([limit as i64], |row| {
-            Ok(FailingTest {
-                test_name: row.get(0)?,
-                suite_name: row.get(1)?,
-                full_name: row.get(2)?,
-                duration_ms: row.get(3)?,
-                output_json: row.get(4)?,
-                run_id: row.get(5)?,
-                commit_sha: row.get(6)?,
-                started_at: row.get(7)?,
-            })
-        })?;
+            let rows = stmt.query_map(params![workspace_id, limit as i64], |row| {
+                Ok(FailingTest {
+                    test_name: row.get(0)?,
+                    suite_name: row.get(1)?,
+                    full_name: row.get(2)?,
+                    duration_ms: row.get(3)?,
+                    output_json: row.get(4)?,
+                    run_id: row.get(5)?,
+                    commit_sha: row.get(6)?,
+                    started_at: row.get(7)?,
+                })
+            })?;
 
-        for row in rows {
-            tests.push(row?);
+            for row in rows {
+                tests.push(row?);
+            }
+        }
+        (None, Some(commit)) => {
+            // Filter by commit only
+            let commit_pattern = format!("{}%", commit);
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT test_name, suite_name, full_name, duration_ms,
+                       output_json, run_id, commit_sha, started_at
+                FROM failing_tests
+                WHERE commit_sha LIKE ?
+                ORDER BY started_at DESC
+                LIMIT ?
+                "#,
+            )?;
+
+            let rows = stmt.query_map(params![commit_pattern, limit as i64], |row| {
+                Ok(FailingTest {
+                    test_name: row.get(0)?,
+                    suite_name: row.get(1)?,
+                    full_name: row.get(2)?,
+                    duration_ms: row.get(3)?,
+                    output_json: row.get(4)?,
+                    run_id: row.get(5)?,
+                    commit_sha: row.get(6)?,
+                    started_at: row.get(7)?,
+                })
+            })?;
+
+            for row in rows {
+                tests.push(row?);
+            }
+        }
+        (None, None) => {
+            // No filters
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT test_name, suite_name, full_name, duration_ms,
+                       output_json, run_id, commit_sha, started_at
+                FROM failing_tests
+                ORDER BY started_at DESC
+                LIMIT ?
+                "#,
+            )?;
+
+            let rows = stmt.query_map([limit as i64], |row| {
+                Ok(FailingTest {
+                    test_name: row.get(0)?,
+                    suite_name: row.get(1)?,
+                    full_name: row.get(2)?,
+                    duration_ms: row.get(3)?,
+                    output_json: row.get(4)?,
+                    run_id: row.get(5)?,
+                    commit_sha: row.get(6)?,
+                    started_at: row.get(7)?,
+                })
+            })?;
+
+            for row in rows {
+                tests.push(row?);
+            }
         }
     }
 
@@ -663,7 +735,7 @@ mod tests {
     #[test]
     fn test_get_failing_tests_empty() {
         let conn = setup_db();
-        let tests = get_failing_tests(&conn, 10, None).expect("failing tests");
+        let tests = get_failing_tests(&conn, 10, None, None).expect("failing tests");
         assert!(tests.is_empty());
     }
 
@@ -771,7 +843,7 @@ mod tests {
         .expect("insert test result");
 
         // Get failing tests
-        let tests = get_failing_tests(&conn, 10, None).expect("failing tests");
+        let tests = get_failing_tests(&conn, 10, None, None).expect("failing tests");
         assert_eq!(tests.len(), 1);
         assert_eq!(tests[0].suite_name, "hindsight-mcp");
         assert_eq!(tests[0].full_name, "test_something");
@@ -878,7 +950,8 @@ mod tests {
         .expect("insert test result");
 
         // Get failing tests filtered by path (not ID) - this tests the bug fix
-        let tests = get_failing_tests(&conn, 10, Some("/my/workspace")).expect("failing tests");
+        let tests =
+            get_failing_tests(&conn, 10, Some("/my/workspace"), None).expect("failing tests");
         assert_eq!(tests.len(), 1);
         assert_eq!(tests[0].suite_name, "my-crate");
     }

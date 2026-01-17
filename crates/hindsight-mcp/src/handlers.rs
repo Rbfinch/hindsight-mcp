@@ -94,6 +94,8 @@ pub struct FailingTestsInput {
     pub limit: usize,
     /// Filter by workspace path
     pub workspace: Option<String>,
+    /// Filter by commit SHA (full or partial)
+    pub commit: Option<String>,
 }
 
 fn default_failing_tests_limit() -> usize {
@@ -259,7 +261,12 @@ pub fn handle_failing_tests(
         .as_deref()
         .or_else(|| default_workspace.and_then(|p| p.to_str()));
 
-    let tests = queries::get_failing_tests(db.connection(), input.limit, workspace_filter)?;
+    let tests = queries::get_failing_tests(
+        db.connection(),
+        input.limit,
+        workspace_filter,
+        input.commit.as_deref(),
+    )?;
 
     Ok(tests)
 }

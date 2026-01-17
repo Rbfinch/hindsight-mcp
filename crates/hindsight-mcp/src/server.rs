@@ -179,7 +179,7 @@ impl HindsightServer {
     fn failing_tests_tool() -> Tool {
         Tool {
             name: "hindsight_failing_tests".into(),
-            description: Some("Get currently failing tests from the most recent test runs.".into()),
+            description: Some("Get currently failing tests from the most recent test runs, optionally filtered by commit.".into()),
             input_schema: ToolInputSchema::new(
                 vec![],
                 Some(make_properties(json!({
@@ -191,6 +191,10 @@ impl HindsightServer {
                     "workspace": {
                         "type": "string",
                         "description": "Filter by workspace (optional)"
+                    },
+                    "commit": {
+                        "type": "string",
+                        "description": "Filter by commit SHA - full or partial (optional)"
                     }
                 }))),
                 None,

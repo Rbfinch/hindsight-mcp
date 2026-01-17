@@ -59,7 +59,8 @@ fn query_benchmarks(c: &mut Criterion) {
     // Failing tests benchmark (empty result is still valid)
     group.bench_function("failing_tests", |b| {
         b.iter(|| {
-            queries::get_failing_tests(db.connection(), 50, None).expect("failing tests failed")
+            queries::get_failing_tests(db.connection(), 50, None, None)
+                .expect("failing tests failed")
         })
     });
 
