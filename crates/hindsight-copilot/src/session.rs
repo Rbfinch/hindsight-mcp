@@ -1,7 +1,147 @@
-//! Chat session types and operations
+//! Chat session types, discovery, and parsing
+//!
+//! This module provides:
+//! - [`ChatSession`] and [`ChatMessage`] types for representing chat data
+//! - [`SessionDiscovery`] for finding VS Code chat session files
+//! - [`parse_session_file`] for parsing session JSON into domain types
+//! - [`WorkspaceInfo`] for correlating workspaces with their storage IDs
+
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tracing::{debug, warn};
+
+use crate::error::CopilotError;
+
+// ============================================================================
+// Raw JSON Types (for deserializing VS Code's format)
+// ============================================================================
+
+/// Raw session file structure from VS Code chatSessions/*.json
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Fields used for deserialization
+struct RawSession {
+    version: u32,
+    #[serde(default)]
+    requester_username: Option<String>,
+    #[serde(default)]
+    responder_username: Option<String>,
+    session_id: String,
+    #[serde(default)]
+    creation_date: Option<i64>,
+    #[serde(default)]
+    last_message_date: Option<i64>,
+    #[serde(default)]
+    requests: Vec<RawRequest>,
+    #[serde(default)]
+    mode: Option<RawMode>,
+    #[serde(default)]
+    selected_model: Option<RawSelectedModel>,
+}
+
+/// Raw request from the session
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Fields used for deserialization
+struct RawRequest {
+    request_id: String,
+    message: Option<RawMessage>,
+    #[serde(default)]
+    variable_data: Option<RawVariableData>,
+    #[serde(default)]
+    response: Vec<RawResponsePart>,
+    #[serde(default)]
+    agent: Option<RawAgent>,
+    timestamp: Option<i64>,
+    #[serde(default)]
+    model_id: Option<String>,
+}
+
+/// Raw message structure
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)] // Fields used for deserialization
+struct RawMessage {
+    text: String,
+    #[serde(default)]
+    parts: Vec<RawMessagePart>,
+}
+
+/// Raw message part
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)] // Fields used for deserialization
+struct RawMessagePart {
+    #[serde(default)]
+    text: Option<String>,
+    #[serde(default)]
+    kind: Option<String>,
+}
+
+/// Raw variable data (file references, workspace info, etc.)
+#[derive(Debug, Clone, Deserialize)]
+struct RawVariableData {
+    #[serde(default)]
+    variables: Vec<RawVariable>,
+}
+
+/// Raw variable entry
+#[derive(Debug, Clone, Deserialize)]
+struct RawVariable {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    kind: Option<String>,
+    // Value can be a string or an object with URI info
+    #[serde(default)]
+    value: Option<serde_json::Value>,
+}
+
+/// Raw response part
+#[derive(Debug, Clone, Deserialize)]
+struct RawResponsePart {
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    value: Option<serde_json::Value>,
+}
+
+/// Raw agent info
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Fields used for deserialization
+struct RawAgent {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    full_name: Option<String>,
+}
+
+/// Raw mode info
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)] // Fields used for deserialization
+struct RawMode {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    kind: Option<String>,
+}
+
+/// Raw selected model info
+#[derive(Debug, Clone, Deserialize)]
+struct RawSelectedModel {
+    #[serde(default)]
+    identifier: Option<String>,
+}
+
+// ============================================================================
+// Domain Types
+// ============================================================================
 
 /// Represents a Copilot chat session
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,6 +156,12 @@ pub struct ChatSession {
     pub updated_at: DateTime<Utc>,
     /// Messages in this session
     pub messages: Vec<ChatMessage>,
+    /// Model used for this session (e.g., "copilot/claude-opus-4.5")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Session mode (e.g., "agent", "ask")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
 }
 
 impl ChatSession {
@@ -28,6 +174,29 @@ impl ChatSession {
             created_at: timestamp,
             updated_at: timestamp,
             messages: Vec::new(),
+            model: None,
+            mode: None,
+        }
+    }
+
+    /// Create a session with model and mode information
+    #[must_use]
+    pub fn with_metadata(
+        id: String,
+        workspace_id: String,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        model: Option<String>,
+        mode: Option<String>,
+    ) -> Self {
+        Self {
+            id,
+            workspace_id,
+            created_at,
+            updated_at,
+            messages: Vec::new(),
+            model,
+            mode,
         }
     }
 
@@ -80,6 +249,21 @@ pub struct ChatMessage {
     /// Associated agent (e.g., @workspace)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
+    /// Variables/attachments referenced in this message
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variables: Vec<Variable>,
+}
+
+/// A variable/attachment referenced in a chat message
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Variable {
+    /// Variable kind (e.g., "file", "workspace", "promptFile")
+    pub kind: String,
+    /// Variable name (display name)
+    pub name: String,
+    /// Variable value (file path, content, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
 }
 
 impl ChatMessage {
@@ -91,6 +275,7 @@ impl ChatMessage {
             content,
             timestamp,
             agent: None,
+            variables: Vec::new(),
         }
     }
 
@@ -102,6 +287,7 @@ impl ChatMessage {
             content,
             timestamp,
             agent: None,
+            variables: Vec::new(),
         }
     }
 
@@ -109,6 +295,13 @@ impl ChatMessage {
     #[must_use]
     pub fn with_agent(mut self, agent: String) -> Self {
         self.agent = Some(agent);
+        self
+    }
+
+    /// Add variables to this message
+    #[must_use]
+    pub fn with_variables(mut self, variables: Vec<Variable>) -> Self {
+        self.variables = variables;
         self
     }
 
@@ -168,6 +361,463 @@ pub fn default_chat_sessions_dir() -> Option<std::path::PathBuf> {
     {
         None
     }
+}
+
+// ============================================================================
+// Session Discovery
+// ============================================================================
+
+/// Information about a VS Code workspace from workspace.json
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceInfo {
+    /// The workspace storage ID (directory name hash)
+    pub storage_id: String,
+    /// The workspace folder path (from "folder" field)
+    pub folder_path: Option<PathBuf>,
+    /// The workspace file path (from "workspace" field, for multi-root)
+    pub workspace_file: Option<PathBuf>,
+}
+
+/// Raw workspace.json structure
+#[derive(Debug, Clone, Deserialize)]
+struct RawWorkspaceJson {
+    /// Single folder workspace
+    #[serde(default)]
+    folder: Option<String>,
+    /// Multi-root workspace file
+    #[serde(default)]
+    workspace: Option<String>,
+}
+
+impl WorkspaceInfo {
+    /// Parse workspace.json from a workspace storage directory
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed.
+    pub fn from_storage_dir(storage_dir: &Path) -> Result<Self, CopilotError> {
+        let storage_id = storage_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        let workspace_json_path = storage_dir.join("workspace.json");
+        if !workspace_json_path.exists() {
+            return Ok(Self {
+                storage_id,
+                folder_path: None,
+                workspace_file: None,
+            });
+        }
+
+        let content = fs::read_to_string(&workspace_json_path)?;
+        let raw: RawWorkspaceJson = serde_json::from_str(&content)?;
+
+        let folder_path = raw.folder.and_then(|f| parse_file_uri(&f));
+        let workspace_file = raw.workspace.and_then(|w| parse_file_uri(&w));
+
+        Ok(Self {
+            storage_id,
+            folder_path,
+            workspace_file,
+        })
+    }
+
+    /// Get the effective workspace path (folder or workspace file)
+    #[must_use]
+    pub fn path(&self) -> Option<&Path> {
+        self.folder_path
+            .as_deref()
+            .or(self.workspace_file.as_deref())
+    }
+}
+
+/// Parse a file:// URI to a PathBuf
+fn parse_file_uri(uri: &str) -> Option<PathBuf> {
+    if let Some(path) = uri.strip_prefix("file://") {
+        // Handle URL-encoded paths
+        let decoded = urlencoding_decode(path);
+        Some(PathBuf::from(decoded))
+    } else {
+        // Not a file URI, treat as raw path
+        Some(PathBuf::from(uri))
+    }
+}
+
+/// Simple URL decoding for file paths (handles %20, etc.)
+fn urlencoding_decode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let hex: String = chars.by_ref().take(2).collect();
+            if hex.len() == 2 {
+                if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                    result.push(byte as char);
+                    continue;
+                }
+            }
+            result.push('%');
+            result.push_str(&hex);
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// Discovered session file with metadata
+#[derive(Debug, Clone)]
+pub struct DiscoveredSession {
+    /// Path to the session JSON file
+    pub path: PathBuf,
+    /// Session ID (from filename)
+    pub session_id: String,
+    /// Workspace storage ID
+    pub workspace_storage_id: String,
+}
+
+/// Session discovery engine for finding VS Code chat sessions
+#[derive(Debug)]
+pub struct SessionDiscovery {
+    /// Root directory for workspace storage
+    storage_root: PathBuf,
+}
+
+impl SessionDiscovery {
+    /// Create a new session discovery using the default storage location
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the default storage directory cannot be determined.
+    pub fn new() -> Result<Self, CopilotError> {
+        let storage_root =
+            default_chat_sessions_dir().ok_or_else(|| CopilotError::WorkspaceStorageNotFound {
+                path: "default location not available".to_string(),
+            })?;
+        Ok(Self { storage_root })
+    }
+
+    /// Create a session discovery with a custom storage root
+    #[must_use]
+    pub fn with_root(storage_root: PathBuf) -> Self {
+        Self { storage_root }
+    }
+
+    /// Get the storage root path
+    #[must_use]
+    pub fn storage_root(&self) -> &Path {
+        &self.storage_root
+    }
+
+    /// Discover all workspace storage directories
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the storage root cannot be read.
+    pub fn discover_workspaces(&self) -> Result<Vec<WorkspaceInfo>, CopilotError> {
+        if !self.storage_root.exists() {
+            return Err(CopilotError::WorkspaceStorageNotFound {
+                path: self.storage_root.display().to_string(),
+            });
+        }
+
+        let mut workspaces = Vec::new();
+
+        for entry in fs::read_dir(&self.storage_root)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                // Skip hidden directories
+                if path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with('.'))
+                {
+                    continue;
+                }
+
+                match WorkspaceInfo::from_storage_dir(&path) {
+                    Ok(info) => workspaces.push(info),
+                    Err(e) => {
+                        warn!("Failed to read workspace info from {:?}: {}", path, e);
+                    }
+                }
+            }
+        }
+
+        Ok(workspaces)
+    }
+
+    /// Discover all chat session files
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the storage directories cannot be read.
+    pub fn discover_sessions(&self) -> Result<Vec<DiscoveredSession>, CopilotError> {
+        if !self.storage_root.exists() {
+            return Err(CopilotError::WorkspaceStorageNotFound {
+                path: self.storage_root.display().to_string(),
+            });
+        }
+
+        let mut sessions = Vec::new();
+
+        for entry in fs::read_dir(&self.storage_root)? {
+            let entry = entry?;
+            let workspace_dir = entry.path();
+
+            if !workspace_dir.is_dir() {
+                continue;
+            }
+
+            let workspace_storage_id = workspace_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            // Skip hidden directories
+            if workspace_storage_id.starts_with('.') {
+                continue;
+            }
+
+            let chat_sessions_dir = workspace_dir.join("chatSessions");
+            if !chat_sessions_dir.exists() {
+                continue;
+            }
+
+            match fs::read_dir(&chat_sessions_dir) {
+                Ok(entries) => {
+                    for session_entry in entries.flatten() {
+                        let session_path = session_entry.path();
+                        if session_path.extension().is_some_and(|e| e == "json") {
+                            let session_id = session_path
+                                .file_stem()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("")
+                                .to_string();
+
+                            sessions.push(DiscoveredSession {
+                                path: session_path,
+                                session_id,
+                                workspace_storage_id: workspace_storage_id.clone(),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    debug!(
+                        "Failed to read chat sessions from {:?}: {}",
+                        chat_sessions_dir, e
+                    );
+                }
+            }
+        }
+
+        Ok(sessions)
+    }
+
+    /// Discover sessions for a specific workspace folder path
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if discovery fails.
+    pub fn discover_sessions_for_workspace(
+        &self,
+        workspace_path: &Path,
+    ) -> Result<Vec<DiscoveredSession>, CopilotError> {
+        let all_sessions = self.discover_sessions()?;
+        let workspaces = self.discover_workspaces()?;
+
+        // Find workspace storage IDs that match the given path
+        let matching_storage_ids: Vec<_> = workspaces
+            .iter()
+            .filter(|w| w.path().is_some_and(|p| p == workspace_path))
+            .map(|w| &w.storage_id)
+            .collect();
+
+        let filtered: Vec<_> = all_sessions
+            .into_iter()
+            .filter(|s| matching_storage_ids.contains(&&s.workspace_storage_id))
+            .collect();
+
+        Ok(filtered)
+    }
+}
+
+// ============================================================================
+// Session Parsing
+// ============================================================================
+
+/// Parse a chat session from a JSON file
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or parsed.
+pub fn parse_session_file(path: &Path, workspace_id: &str) -> Result<ChatSession, CopilotError> {
+    let content = fs::read_to_string(path)?;
+    parse_session_json(&content, workspace_id)
+}
+
+/// Parse a chat session from JSON content
+///
+/// # Errors
+///
+/// Returns an error if the JSON is invalid or doesn't match the expected format.
+pub fn parse_session_json(json: &str, workspace_id: &str) -> Result<ChatSession, CopilotError> {
+    let raw: RawSession = serde_json::from_str(json)?;
+
+    let created_at = raw
+        .creation_date
+        .and_then(DateTime::from_timestamp_millis)
+        .unwrap_or_else(Utc::now);
+
+    let updated_at = raw
+        .last_message_date
+        .and_then(DateTime::from_timestamp_millis)
+        .unwrap_or(created_at);
+
+    let model = raw.selected_model.and_then(|m| m.identifier);
+    let mode = raw.mode.and_then(|m| m.id);
+
+    let mut session = ChatSession::with_metadata(
+        raw.session_id,
+        workspace_id.to_string(),
+        created_at,
+        updated_at,
+        model,
+        mode,
+    );
+
+    // Parse each request/response pair
+    for request in raw.requests {
+        // Extract user message
+        if let Some(msg) = &request.message {
+            let timestamp = request
+                .timestamp
+                .and_then(DateTime::from_timestamp_millis)
+                .unwrap_or(created_at);
+
+            let variables = extract_variables(&request.variable_data);
+
+            let agent_name = request
+                .agent
+                .as_ref()
+                .and_then(|a| a.name.clone().or(a.full_name.clone()));
+
+            let user_msg = ChatMessage::user(msg.text.clone(), timestamp).with_variables(variables);
+
+            let user_msg = if let Some(agent) = agent_name.clone() {
+                user_msg.with_agent(agent)
+            } else {
+                user_msg
+            };
+
+            session.add_message(user_msg);
+        }
+
+        // Extract assistant response
+        let response_text = extract_response_text(&request.response);
+        if !response_text.is_empty() {
+            let timestamp = request
+                .timestamp
+                .and_then(DateTime::from_timestamp_millis)
+                .unwrap_or(created_at);
+
+            let agent_name = request
+                .agent
+                .as_ref()
+                .and_then(|a| a.name.clone().or(a.full_name.clone()));
+
+            let assistant_msg = ChatMessage::assistant(response_text, timestamp);
+            let assistant_msg = if let Some(agent) = agent_name {
+                assistant_msg.with_agent(agent)
+            } else {
+                assistant_msg
+            };
+
+            session.add_message(assistant_msg);
+        }
+    }
+
+    Ok(session)
+}
+
+/// Extract variables from raw variable data
+fn extract_variables(variable_data: &Option<RawVariableData>) -> Vec<Variable> {
+    let Some(data) = variable_data else {
+        return Vec::new();
+    };
+
+    data.variables
+        .iter()
+        .filter_map(|v| {
+            let kind = v.kind.clone().unwrap_or_else(|| "unknown".to_string());
+            let name = v.name.clone().unwrap_or_else(|| "unnamed".to_string());
+
+            // Skip prompt instructions (they're internal)
+            if kind == "promptText" || name.starts_with("prompt:instructions") {
+                return None;
+            }
+
+            // Extract value as string
+            let value = match &v.value {
+                Some(serde_json::Value::String(s)) => Some(s.clone()),
+                Some(serde_json::Value::Object(obj)) => {
+                    // Try to extract path from URI object
+                    obj.get("path")
+                        .and_then(|p| p.as_str())
+                        .map(|s| s.to_string())
+                        .or_else(|| {
+                            obj.get("external")
+                                .and_then(|e| e.as_str())
+                                .map(|s| s.to_string())
+                        })
+                }
+                _ => v.id.clone(),
+            };
+
+            Some(Variable { kind, name, value })
+        })
+        .collect()
+}
+
+/// Extract response text from raw response parts
+fn extract_response_text(response_parts: &[RawResponsePart]) -> String {
+    let mut text_parts = Vec::new();
+
+    for part in response_parts {
+        match part.kind.as_deref() {
+            Some("thinking") => {
+                // Include thinking content if it has meaningful text
+                if let Some(serde_json::Value::String(s)) = &part.value {
+                    if !s.is_empty() && s.len() < 500 {
+                        // Skip encrypted/encoded thinking
+                        text_parts.push(s.clone());
+                    }
+                }
+            }
+            Some("textEditGroup") | Some("codeblockUri") | Some("prepareToolInvocation") => {
+                // Skip these - they're tool-related, not text
+            }
+            _ => {
+                // Default: try to extract text from value
+                if let Some(serde_json::Value::String(s)) = &part.value {
+                    text_parts.push(s.clone());
+                } else if let Some(serde_json::Value::Object(obj)) = &part.value {
+                    if let Some(serde_json::Value::String(s)) = obj.get("value") {
+                        text_parts.push(s.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    text_parts.join("")
 }
 
 #[cfg(test)]
@@ -305,6 +955,225 @@ mod tests {
             assert!(path.is_none());
         }
     }
+
+    // ========================================================================
+    // Session parsing tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_session_json_empty() {
+        let json = r#"{
+            "version": 3,
+            "sessionId": "test-session-id",
+            "creationDate": 1705500000000,
+            "lastMessageDate": 1705500001000,
+            "requests": []
+        }"#;
+
+        let session = parse_session_json(json, "workspace-123").expect("parse");
+        assert_eq!(session.id, "test-session-id");
+        assert_eq!(session.workspace_id, "workspace-123");
+        assert!(session.is_empty());
+    }
+
+    #[test]
+    fn test_parse_session_json_with_request() {
+        let json = r#"{
+            "version": 3,
+            "sessionId": "session-with-request",
+            "creationDate": 1705500000000,
+            "lastMessageDate": 1705500001000,
+            "requests": [
+                {
+                    "requestId": "request-1",
+                    "message": {
+                        "text": "Hello, Copilot!",
+                        "parts": []
+                    },
+                    "timestamp": 1705500000500,
+                    "response": [
+                        {
+                            "value": "Hello! How can I help you?",
+                            "supportThemeIcons": false
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let session = parse_session_json(json, "ws").expect("parse");
+        assert_eq!(session.message_count(), 2);
+
+        let user_msgs = session.user_messages();
+        assert_eq!(user_msgs.len(), 1);
+        assert_eq!(user_msgs[0].content, "Hello, Copilot!");
+
+        let assistant_msgs = session.assistant_messages();
+        assert_eq!(assistant_msgs.len(), 1);
+        assert_eq!(assistant_msgs[0].content, "Hello! How can I help you?");
+    }
+
+    #[test]
+    fn test_parse_session_json_with_model() {
+        let json = r#"{
+            "version": 3,
+            "sessionId": "session-with-model",
+            "creationDate": 1705500000000,
+            "lastMessageDate": 1705500001000,
+            "requests": [],
+            "selectedModel": {
+                "identifier": "copilot/claude-opus-4.5"
+            },
+            "mode": {
+                "id": "agent",
+                "kind": "agent"
+            }
+        }"#;
+
+        let session = parse_session_json(json, "ws").expect("parse");
+        assert_eq!(session.model, Some("copilot/claude-opus-4.5".to_string()));
+        assert_eq!(session.mode, Some("agent".to_string()));
+    }
+
+    #[test]
+    fn test_parse_session_json_with_variables() {
+        let json = r#"{
+            "version": 3,
+            "sessionId": "session-with-vars",
+            "creationDate": 1705500000000,
+            "lastMessageDate": 1705500001000,
+            "requests": [
+                {
+                    "requestId": "request-1",
+                    "message": {
+                        "text": "Check this file",
+                        "parts": []
+                    },
+                    "variableData": {
+                        "variables": [
+                            {
+                                "kind": "file",
+                                "name": "main.rs",
+                                "value": {
+                                    "path": "/project/src/main.rs",
+                                    "scheme": "file"
+                                }
+                            },
+                            {
+                                "kind": "workspace",
+                                "name": "myproject",
+                                "value": "Repository info"
+                            }
+                        ]
+                    },
+                    "timestamp": 1705500000500,
+                    "response": []
+                }
+            ]
+        }"#;
+
+        let session = parse_session_json(json, "ws").expect("parse");
+        assert_eq!(session.message_count(), 1);
+
+        let msg = &session.messages[0];
+        assert_eq!(msg.variables.len(), 2);
+        assert_eq!(msg.variables[0].kind, "file");
+        assert_eq!(msg.variables[0].name, "main.rs");
+        assert_eq!(
+            msg.variables[0].value,
+            Some("/project/src/main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_file_uri() {
+        assert_eq!(
+            parse_file_uri("file:///Users/test/project"),
+            Some(PathBuf::from("/Users/test/project"))
+        );
+        assert_eq!(
+            parse_file_uri("file:///path/with%20spaces"),
+            Some(PathBuf::from("/path/with spaces"))
+        );
+        assert_eq!(
+            parse_file_uri("/raw/path"),
+            Some(PathBuf::from("/raw/path"))
+        );
+    }
+
+    #[test]
+    fn test_urlencoding_decode() {
+        assert_eq!(urlencoding_decode("hello%20world"), "hello world");
+        assert_eq!(urlencoding_decode("no%2fslash"), "no/slash");
+        assert_eq!(urlencoding_decode("plain"), "plain");
+        assert_eq!(urlencoding_decode("%2F%2F"), "//");
+    }
+
+    #[test]
+    fn test_variable_serialization() {
+        let var = Variable {
+            kind: "file".to_string(),
+            name: "test.rs".to_string(),
+            value: Some("/path/to/test.rs".to_string()),
+        };
+        let json = serde_json::to_string(&var).expect("serialize");
+        let deserialized: Variable = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(var, deserialized);
+    }
+
+    #[test]
+    fn test_message_with_variables() {
+        let vars = vec![Variable {
+            kind: "file".to_string(),
+            name: "lib.rs".to_string(),
+            value: Some("/src/lib.rs".to_string()),
+        }];
+
+        let msg = ChatMessage::user("Test".to_string(), sample_timestamp()).with_variables(vars);
+
+        assert_eq!(msg.variables.len(), 1);
+        assert_eq!(msg.variables[0].name, "lib.rs");
+    }
+
+    #[test]
+    fn test_session_with_metadata() {
+        let ts = sample_timestamp();
+        let session = ChatSession::with_metadata(
+            "id".to_string(),
+            "ws".to_string(),
+            ts,
+            ts,
+            Some("gpt-4".to_string()),
+            Some("ask".to_string()),
+        );
+
+        assert_eq!(session.model, Some("gpt-4".to_string()));
+        assert_eq!(session.mode, Some("ask".to_string()));
+    }
+
+    #[test]
+    fn test_workspace_info_path() {
+        let info = WorkspaceInfo {
+            storage_id: "abc123".to_string(),
+            folder_path: Some(PathBuf::from("/project")),
+            workspace_file: None,
+        };
+        assert_eq!(info.path(), Some(Path::new("/project")));
+
+        let info2 = WorkspaceInfo {
+            storage_id: "xyz789".to_string(),
+            folder_path: None,
+            workspace_file: Some(PathBuf::from("/multi.code-workspace")),
+        };
+        assert_eq!(info2.path(), Some(Path::new("/multi.code-workspace")));
+
+        let info3 = WorkspaceInfo {
+            storage_id: "empty".to_string(),
+            folder_path: None,
+            workspace_file: None,
+        };
+        assert!(info3.path().is_none());
+    }
 }
 
 #[cfg(test)]
@@ -321,21 +1190,37 @@ mod property_tests {
         ]
     }
 
+    /// Strategy to generate a Variable
+    fn variable_strategy() -> impl Strategy<Value = Variable> {
+        (
+            prop_oneof![Just("file"), Just("workspace"), Just("selection")],
+            "[a-z._-]{1,20}",
+            proptest::option::of("[a-z/._-]{1,50}"),
+        )
+            .prop_map(|(kind, name, value)| Variable {
+                kind: kind.to_string(),
+                name,
+                value,
+            })
+    }
+
     /// Strategy to generate arbitrary ChatMessage values
     fn message_strategy() -> impl Strategy<Value = ChatMessage> {
         (
             role_strategy(),
-            ".*",                           // content
-            0i64..2_000_000_000i64,         // timestamp as unix seconds
-            proptest::option::of("@[a-z]+"), // agent
+            ".*",                                                 // content
+            0i64..2_000_000_000i64,                               // timestamp as unix seconds
+            proptest::option::of("@[a-z]+"),                      // agent
+            proptest::collection::vec(variable_strategy(), 0..3), // variables
         )
-            .prop_map(|(role, content, ts, agent)| {
+            .prop_map(|(role, content, ts, agent, variables)| {
                 let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
                 ChatMessage {
                     role,
                     content,
                     timestamp,
                     agent,
+                    variables,
                 }
             })
     }
@@ -350,7 +1235,7 @@ mod property_tests {
         (
             session_id_strategy(),
             session_id_strategy(),
-            0i64..2_000_000_000i64,                   // created_at timestamp
+            0i64..2_000_000_000i64, // created_at timestamp
             proptest::collection::vec(message_strategy(), 0..10), // messages
         )
             .prop_map(|(id, workspace_id, ts, messages)| {

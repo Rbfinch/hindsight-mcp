@@ -169,33 +169,34 @@ cargo clippy -p hindsight-tests       # ✅ No warnings
 
 ### Phase 2: Copilot Session Discovery (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-17
 **Goal**: Implement discovery of Copilot chat sessions from VS Code storage
 **Dependencies**: None (can run in parallel with Phases 0-1)
 
 #### Tasks
 
-1. **Session file discovery** (~80 lines)
+1. **Session file discovery** (~80 lines) ✅
    - Locate VS Code storage directory per platform
    - Enumerate workspace directories
    - Find chat session JSON files
 
-2. **Session parsing** (~60 lines)
+2. **Session parsing** (~60 lines) ✅
    - Parse session JSON structure
    - Extract session metadata
    - Convert to `ChatSession` struct
 
-3. **Message extraction** (~80 lines)
+3. **Message extraction** (~80 lines) ✅
    - Extract user/assistant messages from requests
    - Parse variables (file references, selections)
    - Handle nested message structures
 
-4. **Workspace correlation** (~50 lines)
+4. **Workspace correlation** (~50 lines) ✅
    - Map VS Code workspace ID to file path
    - Read `workspace.json` for workspace info
    - Handle missing or corrupted files
 
-5. **Unit tests** (~70 lines)
+5. **Unit tests** (~70 lines) ✅
    - Test session discovery on supported platforms
    - Test JSON parsing
    - Test message extraction
@@ -203,23 +204,23 @@ cargo clippy -p hindsight-tests       # ✅ No warnings
 
 #### Deliverables
 
-- `crates/hindsight-copilot/src/session.rs` - Extended with discovery functions
-- `crates/hindsight-copilot/src/parser.rs` - Extended for session files
+- `crates/hindsight-copilot/src/session.rs` - Extended with discovery functions (~550 new lines) ✅
+- `crates/hindsight-copilot/src/lib.rs` - Extended with exports ✅
 
 #### Validation Gate
 
 ```bash
-cargo nextest run -p hindsight-copilot
-cargo clippy -p hindsight-copilot
+cargo nextest run -p hindsight-copilot  # ✅ 62 tests pass
+cargo clippy -p hindsight-copilot       # ✅ No warnings
 ```
 
 #### Success Criteria
 
-- [ ] Can discover VS Code storage directory
-- [ ] Can enumerate chat session files
-- [ ] Can parse session JSON to structs
-- [ ] Can extract messages with variables
-- [ ] ≥6 unit tests pass
+- [x] Can discover VS Code storage directory
+- [x] Can enumerate chat session files
+- [x] Can parse session JSON to structs
+- [x] Can extract messages with variables
+- [x] ≥6 unit tests pass (12 new tests)
 
 **Commit**: `feat(copilot): implement session discovery and parsing`
 
