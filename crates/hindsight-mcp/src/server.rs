@@ -16,8 +16,10 @@ use rust_mcp_sdk::schema::{
 };
 use serde_json::{Map, Value, json};
 use tokio::sync::Mutex;
+use tracing::{debug, error};
 
 use crate::db::Database;
+use crate::handlers::{self, HandlerError};
 
 /// Convert a JSON object into the properties format expected by ToolInputSchema.
 ///
@@ -42,6 +44,8 @@ fn make_properties(json_obj: Value) -> HashMap<String, Map<String, Value>> {
 pub struct HindsightServer {
     /// The underlying SQLite database (wrapped for thread safety)
     db: Arc<Mutex<Database>>,
+    /// Path to the database file (for creating new connections)
+    db_path: Option<PathBuf>,
     /// Default workspace path for queries
     workspace: Option<PathBuf>,
 }
@@ -57,8 +61,19 @@ impl HindsightServer {
     pub fn new(db: Database, workspace: Option<PathBuf>) -> Self {
         Self {
             db: Arc::new(Mutex::new(db)),
+            db_path: None,
             workspace,
         }
+    }
+
+    /// Create a new hindsight server with a database file path
+    ///
+    /// This allows the server to create new database connections for
+    /// operations that require database ownership (like ingestion).
+    #[must_use]
+    pub fn with_db_path(mut self, path: PathBuf) -> Self {
+        self.db_path = Some(path);
+        self
     }
 
     /// Get access to the database (async, requires await)
@@ -70,6 +85,13 @@ impl HindsightServer {
     #[must_use]
     pub fn workspace(&self) -> Option<&PathBuf> {
         self.workspace.as_ref()
+    }
+
+    /// Open a new database connection for operations requiring ownership
+    fn open_db_for_ingest(&self) -> Option<Database> {
+        self.db_path
+            .as_ref()
+            .and_then(|path| Database::open(path).ok())
     }
 
     /// Build the list of available tools
@@ -235,15 +257,19 @@ impl HindsightServer {
     fn ingest_tool() -> Tool {
         Tool {
             name: "hindsight_ingest".into(),
-            description: Some("Trigger data ingestion from sources (git, tests, copilot).".into()),
+            description: Some(
+                "Trigger data ingestion from sources (git, copilot). \
+                 Note: Test ingestion requires nextest output and should be done via CLI."
+                    .into(),
+            ),
             input_schema: ToolInputSchema::new(
                 vec!["workspace".into()],
                 Some(make_properties(json!({
                     "source": {
                         "type": "string",
-                        "enum": ["git", "tests", "copilot", "all"],
+                        "enum": ["git", "copilot", "all"],
                         "default": "all",
-                        "description": "Source to ingest from"
+                        "description": "Source to ingest from (git, copilot, or all)"
                     },
                     "workspace": {
                         "type": "string",
@@ -293,26 +319,71 @@ impl ServerHandler for HindsightServer {
         params: CallToolRequestParams,
         _runtime: Arc<dyn McpServer>,
     ) -> Result<CallToolResult, CallToolError> {
-        tracing::debug!(tool = %params.name, "Calling tool");
+        debug!(tool = %params.name, "Calling tool");
 
-        // TODO: Implement tool handlers in Phase 2
-        // For now, return a placeholder response
-        match params.name.as_str() {
-            "hindsight_timeline"
-            | "hindsight_search"
-            | "hindsight_failing_tests"
-            | "hindsight_activity_summary"
-            | "hindsight_commit_details"
-            | "hindsight_ingest" => Ok(CallToolResult::text_content(vec![TextContent::new(
-                format!(
-                    "Tool '{}' is registered but not yet implemented. \
-                     Tool handlers will be added in Phase 2.",
-                    params.name
-                ),
-                None,
-                None,
-            )])),
-            _ => Err(CallToolError::unknown_tool(&params.name)),
+        let args = params.arguments;
+
+        let result: Result<Value, HandlerError> = match params.name.as_str() {
+            "hindsight_timeline" => {
+                let db = self.db.lock().await;
+                let workspace = self.workspace.clone();
+                handlers::handle_timeline(&db, args, workspace.as_ref())
+                    .map(|events| serde_json::to_value(events).unwrap_or_default())
+            }
+            "hindsight_search" => {
+                let db = self.db.lock().await;
+                handlers::handle_search(&db, args)
+                    .map(|results| serde_json::to_value(results).unwrap_or_default())
+            }
+            "hindsight_failing_tests" => {
+                let db = self.db.lock().await;
+                let workspace = self.workspace.clone();
+                handlers::handle_failing_tests(&db, args, workspace.as_ref())
+                    .map(|tests| serde_json::to_value(tests).unwrap_or_default())
+            }
+            "hindsight_activity_summary" => {
+                let db = self.db.lock().await;
+                handlers::handle_activity_summary(&db, args)
+                    .map(|summary| serde_json::to_value(summary).unwrap_or_default())
+            }
+            "hindsight_commit_details" => {
+                let db = self.db.lock().await;
+                handlers::handle_commit_details(&db, args)
+                    .map(|commit| serde_json::to_value(commit).unwrap_or_default())
+            }
+            "hindsight_ingest" => {
+                // Ingest requires ownership of database, so we open a new connection
+                // This is safe because SQLite handles concurrent access
+                match self.open_db_for_ingest() {
+                    Some(db) => handlers::handle_ingest(db, args)
+                        .map(|response| serde_json::to_value(response).unwrap_or_default()),
+                    None => Err(HandlerError::InvalidInput(
+                        "Cannot perform ingestion: database path not configured. \
+                         Use --database flag when starting the server."
+                            .to_string(),
+                    )),
+                }
+            }
+            _ => return Err(CallToolError::unknown_tool(&params.name)),
+        };
+
+        match result {
+            Ok(value) => {
+                let json_str = serde_json::to_string_pretty(&value).unwrap_or_default();
+                Ok(CallToolResult::text_content(vec![TextContent::new(
+                    json_str, None, None,
+                )]))
+            }
+            Err(e) => {
+                error!(error = %e, tool = %params.name, "Tool handler error");
+                // Return error as content rather than failing the request
+                // This allows the LLM to see and potentially handle the error
+                Ok(CallToolResult::text_content(vec![TextContent::new(
+                    format!("Error: {}", e),
+                    None,
+                    None,
+                )]))
+            }
         }
     }
 }

@@ -111,8 +111,8 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Database initialized successfully");
 
-    // Create handler instance
-    let handler = HindsightServer::new(db, workspace);
+    // Create handler instance with db path for ingestion support
+    let handler = HindsightServer::new(db, workspace).with_db_path(db_path);
 
     // Define server details and capabilities
     let server_details = InitializeResult {

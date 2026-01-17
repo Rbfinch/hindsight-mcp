@@ -957,3 +957,215 @@ fn test_e2e_full_pipeline_validation() {
     );
     assert!(!timeline.is_empty(), "Expected timeline to have events");
 }
+
+// ============================================================================
+// Handler Integration Tests (Phase 2)
+// ============================================================================
+
+#[test]
+fn test_handler_timeline_with_ingested_data() {
+    use hindsight_mcp::handlers::handle_timeline;
+    use std::path::Path;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let mut ingestor = Ingestor::new(db);
+
+    let repo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    if !repo_path.join(".git").exists() {
+        println!("Skipping test: not in a git repository");
+        return;
+    }
+
+    // Ingest some commits
+    let options = IngestOptions::full().with_limit(10);
+    ingestor
+        .ingest_git(repo_path, &options)
+        .expect("Git ingestion failed");
+
+    // Call the handler
+    let db = ingestor.database();
+    let args = serde_json::json!({ "limit": 5 });
+    let args_map: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_value(args).expect("parse args");
+
+    let result = handle_timeline(db, Some(args_map), None);
+
+    assert!(
+        result.is_ok(),
+        "Timeline handler failed: {:?}",
+        result.err()
+    );
+    let events = result.unwrap();
+    assert!(!events.is_empty(), "Expected timeline events");
+    assert!(events.len() <= 5, "Expected at most 5 events");
+
+    println!("Handler returned {} timeline events", events.len());
+}
+
+#[test]
+fn test_handler_search_with_ingested_data() {
+    use hindsight_mcp::handlers::handle_search;
+    use std::path::Path;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let mut ingestor = Ingestor::new(db);
+
+    let repo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    if !repo_path.join(".git").exists() {
+        println!("Skipping test: not in a git repository");
+        return;
+    }
+
+    // Ingest commits
+    let options = IngestOptions::full().with_limit(50);
+    ingestor
+        .ingest_git(repo_path, &options)
+        .expect("Git ingestion failed");
+
+    // Call the search handler
+    let db = ingestor.database();
+    let args = serde_json::json!({
+        "query": "feat",
+        "source": "commits",
+        "limit": 10
+    });
+    let args_map: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_value(args).expect("parse args");
+
+    let result = handle_search(db, Some(args_map));
+
+    assert!(result.is_ok(), "Search handler failed: {:?}", result.err());
+    let results = result.unwrap();
+
+    println!(
+        "Handler returned {} search results for 'feat'",
+        results.len()
+    );
+}
+
+#[test]
+fn test_handler_activity_summary() {
+    use hindsight_mcp::handlers::handle_activity_summary;
+    use std::path::Path;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let mut ingestor = Ingestor::new(db);
+
+    let repo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    if !repo_path.join(".git").exists() {
+        println!("Skipping test: not in a git repository");
+        return;
+    }
+
+    // Ingest commits
+    let options = IngestOptions::full().with_limit(20);
+    ingestor
+        .ingest_git(repo_path, &options)
+        .expect("Git ingestion failed");
+
+    // Call the handler with default args
+    let db = ingestor.database();
+    let result = handle_activity_summary(db, None);
+
+    assert!(
+        result.is_ok(),
+        "Activity summary handler failed: {:?}",
+        result.err()
+    );
+    let summary = result.unwrap();
+
+    assert!(summary.commits > 0, "Expected commits in summary");
+    assert_eq!(summary.days, 7, "Expected default 7 days");
+
+    println!(
+        "Handler returned activity summary: {} commits, {} test runs",
+        summary.commits, summary.test_runs
+    );
+}
+
+#[test]
+fn test_handler_commit_details_not_found() {
+    use hindsight_mcp::handlers::{HandlerError, handle_commit_details};
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let args = serde_json::json!({ "sha": "nonexistent123" });
+    let args_map: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_value(args).expect("parse args");
+
+    let result = handle_commit_details(&db, Some(args_map));
+
+    assert!(result.is_err());
+    match result {
+        Err(HandlerError::NotFound(msg)) => {
+            assert!(msg.contains("nonexistent123"));
+        }
+        Err(e) => panic!("Expected NotFound error, got: {:?}", e),
+        Ok(_) => panic!("Expected error for nonexistent commit"),
+    }
+}
+
+#[test]
+fn test_handler_failing_tests_empty() {
+    use hindsight_mcp::handlers::handle_failing_tests;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let result = handle_failing_tests(&db, None, None);
+
+    assert!(
+        result.is_ok(),
+        "Failing tests handler failed: {:?}",
+        result.err()
+    );
+    let tests = result.unwrap();
+
+    // Empty database should return empty list
+    assert!(tests.is_empty(), "Expected no failing tests in empty db");
+}
+
+#[test]
+fn test_handler_search_empty_query_error() {
+    use hindsight_mcp::handlers::{HandlerError, handle_search};
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let args = serde_json::json!({ "query": "" });
+    let args_map: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_value(args).expect("parse args");
+
+    let result = handle_search(&db, Some(args_map));
+
+    assert!(result.is_err());
+    match result {
+        Err(HandlerError::InvalidInput(msg)) => {
+            assert!(msg.contains("empty"));
+        }
+        Err(e) => panic!("Expected InvalidInput error, got: {:?}", e),
+        Ok(_) => panic!("Expected error for empty query"),
+    }
+}

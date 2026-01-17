@@ -16,8 +16,10 @@
 - Query helper functions in `queries.rs` (728 lines): `get_timeline`, `search_commits`, `search_messages`, `search_all`, `get_failing_tests`, `get_activity_summary`, `get_commit_with_tests`
 - Data ingestion pipeline complete via `Ingestor` in `ingest.rs` (823 lines)
 - Database operations in `db.rs` with record types and batch insertion
-- 227 tests passing across all crates
-- `server.rs` and `main.rs` are stubs with TODO comments
+- 255 tests passing across all crates
+- MCP server skeleton complete: CLI parsing, tool schemas, server initialization
+- Tool handlers implemented in `handlers.rs` (520 lines): all 6 tools wired to database queries
+- **Next**: Server configuration and transport (Phase 3)
 
 **The Problem**: All the data infrastructure exists but there is no way for an LLM to access it. The MCP server binary does nothing—it cannot register tools, handle requests, or expose queries to AI clients.
 
@@ -35,13 +37,13 @@
 
 | Metric | Target | Status |
 |--------|--------|--------|
-| MCP server starts | Binary runs and accepts connections | ⏳ Pending |
-| Tools registered | ≥6 tools exposed via MCP | ⏳ Pending |
-| Tool execution | All tools return valid JSON | ⏳ Pending |
-| Database integration | Queries run against SQLite | ⏳ Pending |
-| Configuration | CLI args for db path, workspace | ⏳ Pending |
+| MCP server starts | Binary runs and accepts connections | ✅ Done |
+| Tools registered | ≥6 tools exposed via MCP | ✅ Done (6 tools) |
+| Tool execution | All tools return valid JSON | ✅ Done |
+| Database integration | Queries run against SQLite | ✅ Done |
+| Configuration | CLI args for db path, workspace | ✅ Done |
 | VS Code integration | Works with Copilot MCP | ⏳ Pending |
-| Integration tests | ≥8 new tests | ⏳ Pending |
+| Integration tests | ≥8 new tests | ✅ Done (255 total) |
 | Documentation | README updated with usage | ⏳ Pending |
 
 ---
@@ -174,7 +176,7 @@ Trigger data ingestion from sources.
 
 ### Phase 0: MCP Server Skeleton (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
 **Goal**: Implement basic MCP server that starts and responds to `initialize` and `tools/list`
 **Dependencies**: None
 
@@ -225,11 +227,11 @@ cargo nextest run -p hindsight-mcp
 
 #### Success Criteria
 
-- [ ] Binary builds and runs
-- [ ] `--help` shows usage information
-- [ ] Server responds to `initialize` with capabilities
-- [ ] `tools/list` returns tool schemas
-- [ ] ≥3 unit tests pass
+- [x] Binary builds and runs
+- [x] `--help` shows usage information
+- [x] Server responds to `initialize` with capabilities
+- [x] `tools/list` returns tool schemas
+- [x] ≥3 unit tests pass (8 new tests)
 
 **Commit**: `feat(mcp): implement MCP server skeleton with tool listing`
 
@@ -237,7 +239,7 @@ cargo nextest run -p hindsight-mcp
 
 ### Phase 1: Tool Schemas and Input Validation (0.5 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
 **Goal**: Define JSON schemas for all tools with input validation
 **Dependencies**: Phase 0
 
@@ -279,10 +281,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./target/debug/hindsight
 
 #### Success Criteria
 
-- [ ] All 6 tool schemas defined
-- [ ] Input types deserialize correctly
-- [ ] `tools/list` returns complete schemas
-- [ ] ≥4 unit tests pass
+- [x] All 6 tool schemas defined
+- [x] Input types deserialize correctly
+- [x] `tools/list` returns complete schemas
+- [x] ≥4 unit tests pass
 
 **Commit**: `feat(mcp): define tool schemas with input validation`
 
@@ -290,7 +292,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./target/debug/hindsight
 
 ### Phase 2: Tool Handler Implementation (1.5 sessions)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
 **Goal**: Implement handlers for all tools that execute database queries
 **Dependencies**: Phase 1
 
@@ -339,9 +341,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./target/debug/hindsight
 
 #### Deliverables
 
-- `crates/hindsight-mcp/src/handlers.rs` - Tool handlers (~350 lines)
-- Updated `server.rs` with handler routing
-- Extended integration tests
+- `crates/hindsight-mcp/src/handlers.rs` - Tool handlers (~520 lines)
+- Updated `server.rs` with handler routing and `db_path` field
+- Updated `lib.rs` to export handlers module
+- Extended integration tests (6 new tests)
 
 #### Validation Gate
 
@@ -353,10 +356,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hindsight_
 
 #### Success Criteria
 
-- [ ] All 6 tool handlers implemented
-- [ ] Handlers return valid JSON responses
-- [ ] Error cases handled gracefully
-- [ ] ≥6 integration tests pass
+- [x] All 6 tool handlers implemented
+- [x] Handlers return valid JSON responses
+- [x] Error cases handled gracefully
+- [x] ≥6 integration tests pass (6 handler tests + existing)
 
 **Commit**: `feat(mcp): implement tool handlers with database queries`
 

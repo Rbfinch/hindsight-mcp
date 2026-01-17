@@ -6,6 +6,7 @@
 mod migrations;
 
 pub mod db;
+pub mod handlers;
 pub mod ingest;
 pub mod queries;
 pub mod server;
