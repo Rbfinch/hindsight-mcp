@@ -81,3 +81,14 @@ tarpaulin-report.html
 # Logs
 *.log
 logs/
+
+# HTML files
+*.html
+
+# Quarto
+.quarto/
+_site/
+_book/
+_freeze/
+*_files/
+*.qmd.lock

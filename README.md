@@ -116,6 +116,25 @@ Options:
 | `HINDSIGHT_DATABASE` | Path to SQLite database (alternative to `--database`) |
 | `HINDSIGHT_WORKSPACE` | Default workspace path (alternative to `--workspace`) |
 
+### Ingest Subcommand
+
+The `ingest` command imports test results from stdin:
+
+```
+hindsight-mcp ingest [OPTIONS]
+
+Options:
+      --tests             Ingest test results from stdin (nextest JSON format)
+      --commit <SHA>      Git commit SHA to associate with test results
+  -h, --help              Print help
+```
+
+**Example:**
+```bash
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json | \
+  hindsight-mcp ingest --tests --commit $(git rev-parse HEAD)
+```
+
 ## MCP Tools
 
 hindsight-mcp exposes 6 tools for AI-assisted development:
