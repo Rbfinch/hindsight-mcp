@@ -28,13 +28,13 @@
 
 | Metric | Target | Status |
 |--------|--------|--------|
-| Unit tests written | ≥15 across all crates | ⏳ Pending |
-| Property tests written | ≥5 using proptest | ⏳ Pending |
+| Unit tests written | ≥15 across all crates | ✅ 71 tests |
+| Property tests written | ≥5 using proptest | ✅ 31 tests |
 | Integration tests written | ≥4 (one per crate) | ⏳ Pending |
 | Test logs generated | JSON format from nextest | ⏳ Pending |
 | Git log format documented | Complete schema mapping | ⏳ Pending |
 | Copilot log format documented | Complete schema mapping | ⏳ Pending |
-| SQLite schema designed | All tables, indexes, FKs | ⏳ Pending |
+| SQLite schema designed | All tables, indexes, FKs | ✅ Complete |
 | Schema supports SQL joins | Cross-table queries work | ⏳ Pending |
 
 ---
@@ -199,53 +199,83 @@ cargo clippy --workspace
 
 ### Phase 1: Write Property Tests (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-17
 **Goal**: Add property-based tests using proptest for robustness
 **Dependencies**: Phase 0
 
 #### Tasks
 
-1. **Add proptest to crate dependencies** (~10 lines)
-   - Update `Cargo.toml` for each crate
-   - Add proptest strategies for custom types
+1. **Add proptest to crate dependencies** ✅
+   - proptest already configured as workspace dependency
+   - All crates inherit via `proptest.workspace = true`
 
-2. **hindsight-git property tests** (~60 lines)
-   - Arbitrary `Commit` generation
-   - Round-trip serialization property
-   - SHA format property (40 hex chars)
+2. **hindsight-git property tests** (~95 lines) ✅
+   - Arbitrary `Commit` generation via `commit_strategy()`
+   - SHA format strategy generating valid 40-char hex strings
+   - 9 property tests:
+     - `prop_commit_sha_is_valid`
+     - `prop_commit_roundtrip_serialization`
+     - `prop_short_sha_length`
+     - `prop_is_merge_iff_multiple_parents`
+     - `prop_is_root_iff_no_parents`
+     - `prop_subject_is_prefix_of_message`
+     - `prop_all_parent_shas_valid`
+     - `prop_valid_sha_format`
+     - `prop_invalid_sha_wrong_length`
 
-3. **hindsight-tests property tests** (~50 lines)
-   - Arbitrary `TestResult` generation
-   - Round-trip serialization property
-   - Duration always positive property
+3. **hindsight-tests property tests** (~75 lines) ✅
+   - Arbitrary `TestResult` generation via `test_result_strategy()`
+   - `TestOutcome` strategy for all variants
+   - 8 property tests:
+     - `prop_test_result_roundtrip_serialization`
+     - `prop_passed_failed_exclusive`
+     - `prop_duration_display_format`
+     - `prop_test_fn_name_is_suffix`
+     - `prop_module_path_plus_fn_equals_name`
+     - `prop_outcome_is_success_consistency`
+     - `prop_outcome_has_symbol`
+     - `prop_outcome_serialization_lowercase`
 
-4. **hindsight-copilot property tests** (~50 lines)
-   - Arbitrary `ChatMessage` generation
-   - Round-trip serialization property
-   - Message role exhaustiveness
+4. **hindsight-copilot property tests** (~110 lines) ✅
+   - Arbitrary `ChatMessage` generation via `message_strategy()`
+   - Arbitrary `ChatSession` generation via `session_strategy()`
+   - `MessageRole` strategy for all variants
+   - 14 property tests:
+     - `prop_message_roundtrip_serialization`
+     - `prop_session_roundtrip_serialization`
+     - `prop_content_len_matches`
+     - `prop_has_agent_consistency`
+     - `prop_message_count_matches`
+     - `prop_is_empty_consistency`
+     - `prop_user_messages_role`
+     - `prop_assistant_messages_role`
+     - `prop_message_filter_counts`
+     - `prop_role_serialization_lowercase`
+     - `prop_display_name_non_empty`
+     - `prop_with_agent_sets_agent`
+     - `prop_user_message_has_user_role`
+     - `prop_assistant_message_has_assistant_role`
 
 #### Deliverables
 
-- `crates/hindsight-git/Cargo.toml` - proptest dependency
-- `crates/hindsight-git/src/commit.rs` - Property tests module
-- `crates/hindsight-tests/Cargo.toml` - proptest dependency
-- `crates/hindsight-tests/src/result.rs` - Property tests module
-- `crates/hindsight-copilot/Cargo.toml` - proptest dependency
-- `crates/hindsight-copilot/src/session.rs` - Property tests module
+- `crates/hindsight-git/src/commit.rs` - Property tests module ✅
+- `crates/hindsight-tests/src/result.rs` - Property tests module ✅
+- `crates/hindsight-copilot/src/session.rs` - Property tests module ✅
 
 #### Validation Gate
 
 ```bash
 cargo nextest run --workspace
-# Property tests run 256 cases by default
+# Result: 102 tests run: 102 passed, 0 skipped
 ```
 
 #### Success Criteria
 
-- [ ] All property tests pass
-- [ ] ≥5 property tests across crates
-- [ ] Round-trip properties verified
-- [ ] Edge cases discovered and handled
+- [x] All property tests pass (31 property tests)
+- [x] ≥5 property tests across crates (31 property tests)
+- [x] Round-trip properties verified for all serializable types
+- [x] Edge cases discovered and handled
 
 **Commit**: `test(all): add property-based tests with proptest`
 

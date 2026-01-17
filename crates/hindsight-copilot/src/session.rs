@@ -306,3 +306,165 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod property_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Strategy to generate valid MessageRole values
+    fn role_strategy() -> impl Strategy<Value = MessageRole> {
+        prop_oneof![
+            Just(MessageRole::User),
+            Just(MessageRole::Assistant),
+            Just(MessageRole::System),
+        ]
+    }
+
+    /// Strategy to generate arbitrary ChatMessage values
+    fn message_strategy() -> impl Strategy<Value = ChatMessage> {
+        (
+            role_strategy(),
+            ".*",                           // content
+            0i64..2_000_000_000i64,         // timestamp as unix seconds
+            proptest::option::of("@[a-z]+"), // agent
+        )
+            .prop_map(|(role, content, ts, agent)| {
+                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
+                ChatMessage {
+                    role,
+                    content,
+                    timestamp,
+                    agent,
+                }
+            })
+    }
+
+    /// Strategy to generate session IDs
+    fn session_id_strategy() -> impl Strategy<Value = String> {
+        "[a-z0-9-]{8,36}".prop_map(|s| s.to_string())
+    }
+
+    /// Strategy to generate arbitrary ChatSession values
+    fn session_strategy() -> impl Strategy<Value = ChatSession> {
+        (
+            session_id_strategy(),
+            session_id_strategy(),
+            0i64..2_000_000_000i64,                   // created_at timestamp
+            proptest::collection::vec(message_strategy(), 0..10), // messages
+        )
+            .prop_map(|(id, workspace_id, ts, messages)| {
+                let created_at = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
+                let mut session = ChatSession::new(id, workspace_id, created_at);
+                for msg in messages {
+                    session.add_message(msg);
+                }
+                session
+            })
+    }
+
+    proptest! {
+        /// Property: Round-trip JSON serialization preserves ChatMessage
+        #[test]
+        fn prop_message_roundtrip_serialization(msg in message_strategy()) {
+            let json = serde_json::to_string(&msg).expect("serialize");
+            let deserialized: ChatMessage = serde_json::from_str(&json).expect("deserialize");
+            prop_assert_eq!(msg, deserialized);
+        }
+
+        /// Property: Round-trip JSON serialization preserves ChatSession
+        #[test]
+        fn prop_session_roundtrip_serialization(session in session_strategy()) {
+            let json = serde_json::to_string(&session).expect("serialize");
+            let deserialized: ChatSession = serde_json::from_str(&json).expect("deserialize");
+            prop_assert_eq!(session, deserialized);
+        }
+
+        /// Property: content_len equals content.len()
+        #[test]
+        fn prop_content_len_matches(msg in message_strategy()) {
+            prop_assert_eq!(msg.content_len(), msg.content.len());
+        }
+
+        /// Property: has_agent is true iff agent is Some
+        #[test]
+        fn prop_has_agent_consistency(msg in message_strategy()) {
+            prop_assert_eq!(msg.has_agent(), msg.agent.is_some());
+        }
+
+        /// Property: message_count equals messages.len()
+        #[test]
+        fn prop_message_count_matches(session in session_strategy()) {
+            prop_assert_eq!(session.message_count(), session.messages.len());
+        }
+
+        /// Property: is_empty is true iff messages is empty
+        #[test]
+        fn prop_is_empty_consistency(session in session_strategy()) {
+            prop_assert_eq!(session.is_empty(), session.messages.is_empty());
+        }
+
+        /// Property: user_messages returns only User role messages
+        #[test]
+        fn prop_user_messages_role(session in session_strategy()) {
+            for msg in session.user_messages() {
+                prop_assert_eq!(msg.role, MessageRole::User);
+            }
+        }
+
+        /// Property: assistant_messages returns only Assistant role messages
+        #[test]
+        fn prop_assistant_messages_role(session in session_strategy()) {
+            for msg in session.assistant_messages() {
+                prop_assert_eq!(msg.role, MessageRole::Assistant);
+            }
+        }
+
+        /// Property: user_messages + assistant_messages count <= total messages
+        #[test]
+        fn prop_message_filter_counts(session in session_strategy()) {
+            let user_count = session.user_messages().len();
+            let assistant_count = session.assistant_messages().len();
+            prop_assert!(user_count + assistant_count <= session.message_count());
+        }
+
+        /// Property: MessageRole serializes to lowercase
+        #[test]
+        fn prop_role_serialization_lowercase(role in role_strategy()) {
+            let json = serde_json::to_string(&role).expect("serialize");
+            let value = json.trim_matches('"');
+            prop_assert_eq!(value, value.to_lowercase());
+        }
+
+        /// Property: display_name returns non-empty string
+        #[test]
+        fn prop_display_name_non_empty(role in role_strategy()) {
+            prop_assert!(!role.display_name().is_empty());
+        }
+
+        /// Property: with_agent sets agent correctly
+        #[test]
+        fn prop_with_agent_sets_agent(content in ".*", agent in "@[a-z]+") {
+            let ts = Utc::now();
+            let msg = ChatMessage::user(content, ts).with_agent(agent.clone());
+            prop_assert!(msg.has_agent());
+            prop_assert_eq!(msg.agent, Some(agent));
+        }
+
+        /// Property: ChatMessage::user creates User role
+        #[test]
+        fn prop_user_message_has_user_role(content in ".*") {
+            let msg = ChatMessage::user(content, Utc::now());
+            prop_assert_eq!(msg.role, MessageRole::User);
+            prop_assert!(!msg.has_agent());
+        }
+
+        /// Property: ChatMessage::assistant creates Assistant role
+        #[test]
+        fn prop_assistant_message_has_assistant_role(content in ".*") {
+            let msg = ChatMessage::assistant(content, Utc::now());
+            prop_assert_eq!(msg.role, MessageRole::Assistant);
+            prop_assert!(!msg.has_agent());
+        }
+    }
+}

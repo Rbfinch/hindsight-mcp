@@ -189,3 +189,123 @@ mod tests {
         assert!(json.contains("2026-01-17"));
     }
 }
+
+#[cfg(test)]
+mod property_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Strategy to generate valid 40-character hex SHA strings
+    fn sha_strategy() -> impl Strategy<Value = String> {
+        proptest::string::string_regex("[0-9a-f]{40}")
+            .expect("valid regex")
+            .prop_map(|s| s.to_lowercase())
+    }
+
+    /// Strategy to generate arbitrary Commit values
+    fn commit_strategy() -> impl Strategy<Value = Commit> {
+        (
+            sha_strategy(),
+            ".*",                    // message
+            "[A-Za-z ]{1,50}",       // author name
+            "[a-z]+@[a-z]+\\.[a-z]+", // author email
+            0i64..2_000_000_000i64,  // timestamp as unix seconds
+            proptest::collection::vec(sha_strategy(), 0..3), // parents
+        )
+            .prop_map(|(sha, message, author, author_email, ts, parents)| {
+                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
+                Commit {
+                    sha,
+                    message,
+                    author,
+                    author_email,
+                    timestamp,
+                    parents,
+                }
+            })
+    }
+
+    proptest! {
+        /// Property: Any generated Commit should have a valid SHA
+        #[test]
+        fn prop_commit_sha_is_valid(commit in commit_strategy()) {
+            prop_assert!(
+                Commit::is_valid_sha(&commit.sha),
+                "Generated SHA should be valid: {}",
+                commit.sha
+            );
+        }
+
+        /// Property: Round-trip JSON serialization preserves all fields
+        #[test]
+        fn prop_commit_roundtrip_serialization(commit in commit_strategy()) {
+            let json = serde_json::to_string(&commit).expect("serialize");
+            let deserialized: Commit = serde_json::from_str(&json).expect("deserialize");
+            prop_assert_eq!(commit, deserialized);
+        }
+
+        /// Property: short_sha returns at most 7 characters
+        #[test]
+        fn prop_short_sha_length(commit in commit_strategy()) {
+            let short = commit.short_sha();
+            prop_assert!(short.len() <= 7);
+            prop_assert!(short.len() >= 1);
+        }
+
+        /// Property: is_merge is true iff parents.len() > 1
+        #[test]
+        fn prop_is_merge_iff_multiple_parents(commit in commit_strategy()) {
+            prop_assert_eq!(commit.is_merge(), commit.parents.len() > 1);
+        }
+
+        /// Property: is_root is true iff parents is empty
+        #[test]
+        fn prop_is_root_iff_no_parents(commit in commit_strategy()) {
+            prop_assert_eq!(commit.is_root(), commit.parents.is_empty());
+        }
+
+        /// Property: subject is always a substring of message
+        #[test]
+        fn prop_subject_is_prefix_of_message(commit in commit_strategy()) {
+            let subject = commit.subject();
+            prop_assert!(
+                commit.message.starts_with(subject),
+                "Subject '{}' should be prefix of message '{}'",
+                subject,
+                commit.message
+            );
+        }
+
+        /// Property: All parent SHAs should be valid
+        #[test]
+        fn prop_all_parent_shas_valid(commit in commit_strategy()) {
+            for parent in &commit.parents {
+                prop_assert!(
+                    Commit::is_valid_sha(parent),
+                    "Parent SHA should be valid: {}",
+                    parent
+                );
+            }
+        }
+
+        /// Property: is_valid_sha accepts only 40-char lowercase hex
+        #[test]
+        fn prop_valid_sha_format(sha in sha_strategy()) {
+            prop_assert!(Commit::is_valid_sha(&sha));
+            prop_assert_eq!(sha.len(), 40);
+            prop_assert!(sha.chars().all(|c| c.is_ascii_hexdigit()));
+        }
+
+        /// Property: is_valid_sha rejects strings of wrong length
+        #[test]
+        fn prop_invalid_sha_wrong_length(
+            prefix in "[0-9a-f]{0,39}",
+            suffix in "[0-9a-f]{0,10}"
+        ) {
+            let combined = format!("{}{}", prefix, suffix);
+            if combined.len() != 40 {
+                prop_assert!(!Commit::is_valid_sha(&combined));
+            }
+        }
+    }
+}

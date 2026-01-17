@@ -214,3 +214,141 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod property_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Strategy to generate valid TestOutcome values
+    fn outcome_strategy() -> impl Strategy<Value = TestOutcome> {
+        prop_oneof![
+            Just(TestOutcome::Passed),
+            Just(TestOutcome::Failed),
+            Just(TestOutcome::Ignored),
+            Just(TestOutcome::TimedOut),
+        ]
+    }
+
+    /// Strategy to generate test names in the format "crate::module::test_fn"
+    fn test_name_strategy() -> impl Strategy<Value = String> {
+        (
+            "[a-z_]{1,20}",  // crate name
+            "[a-z_]{1,20}",  // module name
+            "[a-z_]{1,30}", // test function name
+        )
+            .prop_map(|(crate_name, module, test_fn)| {
+                format!("{}::{}::tests::{}", crate_name, module, test_fn)
+            })
+    }
+
+    /// Strategy to generate arbitrary TestResult values
+    fn test_result_strategy() -> impl Strategy<Value = TestResult> {
+        (
+            test_name_strategy(),
+            outcome_strategy(),
+            0u64..1_000_000u64,          // duration_ms
+            0i64..2_000_000_000i64,       // timestamp as unix seconds
+            proptest::option::of(".*"),   // output
+        )
+            .prop_map(|(name, outcome, duration_ms, ts, output)| {
+                let timestamp = DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now());
+                TestResult {
+                    name,
+                    outcome,
+                    duration_ms,
+                    timestamp,
+                    output,
+                }
+            })
+    }
+
+    proptest! {
+        /// Property: Round-trip JSON serialization preserves all fields
+        #[test]
+        fn prop_test_result_roundtrip_serialization(result in test_result_strategy()) {
+            let json = serde_json::to_string(&result).expect("serialize");
+            let deserialized: TestResult = serde_json::from_str(&json).expect("deserialize");
+            prop_assert_eq!(result, deserialized);
+        }
+
+        /// Property: passed() and failed() are mutually exclusive when Passed or Failed
+        #[test]
+        fn prop_passed_failed_exclusive(result in test_result_strategy()) {
+            // Can't be both passed and failed
+            prop_assert!(!(result.passed() && result.failed()));
+
+            // If passed, outcome must be Passed
+            if result.passed() {
+                prop_assert_eq!(result.outcome, TestOutcome::Passed);
+            }
+
+            // If failed, outcome must be Failed
+            if result.failed() {
+                prop_assert_eq!(result.outcome, TestOutcome::Failed);
+            }
+        }
+
+        /// Property: duration_display format is consistent
+        #[test]
+        fn prop_duration_display_format(result in test_result_strategy()) {
+            let display = result.duration_display();
+            // Should end with ms or s
+            prop_assert!(
+                display.ends_with("ms") || display.ends_with('s'),
+                "Display '{}' should end with 'ms' or 's'",
+                display
+            );
+
+            // If < 1000ms, should show ms
+            if result.duration_ms < 1000 {
+                prop_assert!(display.ends_with("ms"));
+            } else {
+                prop_assert!(display.ends_with('s') && !display.ends_with("ms"));
+            }
+        }
+
+        /// Property: test_fn_name is always a suffix of name
+        #[test]
+        fn prop_test_fn_name_is_suffix(result in test_result_strategy()) {
+            let fn_name = result.test_fn_name();
+            prop_assert!(
+                result.name.ends_with(fn_name),
+                "Function name '{}' should be suffix of '{}'",
+                fn_name,
+                result.name
+            );
+        }
+
+        /// Property: module_path + "::" + test_fn_name == name (when module_path exists)
+        #[test]
+        fn prop_module_path_plus_fn_equals_name(result in test_result_strategy()) {
+            if let Some(module) = result.module_path() {
+                let reconstructed = format!("{}::{}", module, result.test_fn_name());
+                prop_assert_eq!(result.name, reconstructed);
+            }
+        }
+
+        /// Property: TestOutcome::is_success is true only for Passed and Ignored
+        #[test]
+        fn prop_outcome_is_success_consistency(outcome in outcome_strategy()) {
+            let expected = matches!(outcome, TestOutcome::Passed | TestOutcome::Ignored);
+            prop_assert_eq!(outcome.is_success(), expected);
+        }
+
+        /// Property: All outcomes have non-empty symbols
+        #[test]
+        fn prop_outcome_has_symbol(outcome in outcome_strategy()) {
+            prop_assert!(!outcome.symbol().is_empty());
+        }
+
+        /// Property: Outcome serialization is lowercase
+        #[test]
+        fn prop_outcome_serialization_lowercase(outcome in outcome_strategy()) {
+            let json = serde_json::to_string(&outcome).expect("serialize");
+            // Remove quotes and check lowercase
+            let value = json.trim_matches('"');
+            prop_assert_eq!(value, value.to_lowercase());
+        }
+    }
+}
