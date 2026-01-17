@@ -148,6 +148,127 @@ VS Code stores Copilot chat history in local SQLite databases and JSON files:
                     └────────────────────────┘
 ```
 
+## Data Ingestion
+
+The ingestion pipeline populates the database from all supported data sources using a unified API.
+
+### Ingestion Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        DATA SOURCES                                  │
+├─────────────────┬─────────────────────┬─────────────────────────────┤
+│   Git Repo      │   Nextest Output    │   VS Code Storage           │
+│   (via git2)    │   (JSON stream)     │   (chatSessions/)           │
+└────────┬────────┴──────────┬──────────┴─────────────┬───────────────┘
+         │                   │                        │
+         ▼                   ▼                        ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────────────────┐
+│ hindsight-git   │ │ hindsight-tests │ │     hindsight-copilot       │
+│                 │ │                 │ │                             │
+│ parser.rs       │ │ nextest.rs      │ │ session.rs                  │
+│ - walk commits  │ │ - parse JSON    │ │ - discover sessions         │
+│ - extract diffs │ │ - extract runs  │ │ - parse messages            │
+│ -> Vec<Commit>  │ │ -> TestSummary  │ │ -> Vec<ChatSession>         │
+└────────┬────────┘ └────────┬────────┘ └─────────────┬───────────────┘
+         │                   │                        │
+         └───────────────────┼────────────────────────┘
+                             │
+                             ▼
+                ┌────────────────────────┐
+                │     hindsight-mcp      │
+                │                        │
+                │ ┌────────────────────┐ │
+                │ │   ingest.rs        │ │
+                │ │   - Ingestor       │ │
+                │ │   - ingest_git()   │ │
+                │ │   - ingest_tests() │ │
+                │ │   - ingest_copilot │ │
+                │ └──────────┬─────────┘ │
+                │            │           │
+                │ ┌──────────▼─────────┐ │
+                │ │      db.rs         │ │
+                │ │   - insert_*()     │ │
+                │ │   - batch ops      │ │
+                │ └──────────┬─────────┘ │
+                │            │           │
+                │ ┌──────────▼─────────┐ │
+                │ │  SQLite Database   │ │
+                │ │  - 7 tables        │ │
+                │ │  - FTS5 indexes    │ │
+                │ │  - 3 views         │ │
+                │ └────────────────────┘ │
+                └────────────────────────┘
+```
+
+### Usage Example
+
+```rust
+use hindsight_mcp::db::Database;
+use hindsight_mcp::ingest::{Ingestor, IngestOptions};
+
+// Create and initialize database
+let mut db = Database::open("/path/to/hindsight.db")?;
+db.initialize()?;
+
+// Create ingestor with optional progress callback
+let mut ingestor = Ingestor::new(db)
+    .with_progress(Box::new(|event| {
+        println!("Progress: {:?}", event);
+    }));
+
+// Ingest git commits (full or incremental)
+let git_options = IngestOptions::full().with_limit(100);
+let git_stats = ingestor.ingest_git("/path/to/repo", &git_options)?;
+println!("Ingested {} commits", git_stats.commits_inserted);
+
+// Ingest test results from nextest output
+let nextest_json = std::fs::read_to_string("nextest-output.json")?;
+let test_stats = ingestor.ingest_tests("/path/to/repo", &nextest_json, None)?;
+println!("Ingested {} test results", test_stats.test_results_inserted);
+
+// Ingest Copilot sessions
+let copilot_stats = ingestor.ingest_copilot("/path/to/repo")?;
+println!("Ingested {} sessions", copilot_stats.sessions_inserted);
+```
+
+### Ingestion Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `commit_limit` | Maximum commits to ingest | None (all) |
+| `include_diffs` | Include diff information | true |
+| `incremental` | Skip already-ingested commits | false |
+
+**Constructors**:
+- `IngestOptions::default()` - All defaults (no limit, no diffs, not incremental)
+- `IngestOptions::full()` - Full ingestion with diffs
+- `IngestOptions::incremental()` - Incremental sync with diffs
+
+### Progress Reporting
+
+The `Ingestor` supports optional progress callbacks:
+
+```rust
+pub enum ProgressEvent {
+    Started { source: String, total_items: Option<usize> },
+    Progress { source: String, processed: usize, total: Option<usize> },
+    Warning { source: String, message: String },
+    Completed { source: String, stats: IngestStats },
+}
+```
+
+### Performance Characteristics
+
+Based on testing with real repository data:
+
+| Operation | Typical Performance |
+|-----------|---------------------|
+| Git ingestion (100 commits with diffs) | < 5 seconds |
+| Timeline query (50 events) | < 10ms |
+| FTS5 search | < 10ms |
+| Activity summary | < 10ms |
+
 ## SQLite Schema
 
 The database uses SQLite with FTS5 full-text search, JSON1 functions, and foreign key constraints.

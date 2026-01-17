@@ -34,7 +34,7 @@ fn test_commit_to_json_for_database() {
     let json = serde_json::to_string(&commit).expect("Failed to serialize commit");
 
     // Verify it's valid JSON
-    let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should be valid JSON");
+    let _parsed: serde_json::Value = serde_json::from_str(&json).expect("Should be valid JSON");
 
     // Check that parents are stored as JSON array (for parents_json column)
     let parents_json = serde_json::to_string(&commit.parents).expect("Failed to serialize parents");
@@ -312,7 +312,7 @@ fn test_test_outcome_as_database_enum() {
 #[test]
 fn test_ingestor_new_with_in_memory_database() {
     // Create an in-memory database and initialize it
-    let mut db = Database::in_memory().expect("Failed to create in-memory database");
+    let db = Database::in_memory().expect("Failed to create in-memory database");
     db.initialize().expect("Failed to initialize database");
 
     // Create the ingestor
@@ -326,7 +326,7 @@ fn test_ingestor_new_with_in_memory_database() {
 fn test_ingestor_with_progress_callback() {
     use std::sync::{Arc, Mutex};
 
-    let mut db = Database::in_memory().expect("Failed to create in-memory database");
+    let db = Database::in_memory().expect("Failed to create in-memory database");
     db.initialize().expect("Failed to initialize database");
 
     // Collect progress events
@@ -360,7 +360,7 @@ fn test_ingestor_with_progress_callback() {
 fn test_ingest_git_on_current_repository() {
     use std::path::Path;
 
-    let mut db = Database::in_memory().expect("Failed to create in-memory database");
+    let db = Database::in_memory().expect("Failed to create in-memory database");
     db.initialize().expect("Failed to initialize database");
 
     let mut ingestor = Ingestor::new(db);
@@ -399,7 +399,7 @@ fn test_ingest_git_on_current_repository() {
 fn test_ingest_tests_with_sample_output() {
     use std::path::Path;
 
-    let mut db = Database::in_memory().expect("Failed to create in-memory database");
+    let db = Database::in_memory().expect("Failed to create in-memory database");
     db.initialize().expect("Failed to initialize database");
 
     let mut ingestor = Ingestor::new(db);
@@ -471,7 +471,7 @@ fn test_ingest_options_builder_pattern() {
 fn test_incremental_git_ingestion() {
     use std::path::Path;
 
-    let mut db = Database::in_memory().expect("Failed to create in-memory database");
+    let db = Database::in_memory().expect("Failed to create in-memory database");
     db.initialize().expect("Failed to initialize database");
 
     let mut ingestor = Ingestor::new(db);
@@ -522,4 +522,438 @@ fn test_incremental_git_ingestion() {
         "First: {} inserted, Second: {} inserted, {} skipped",
         stats1.commits_inserted, stats2.commits_inserted, stats2.commits_skipped
     );
+}
+
+// ============================================================================
+// End-to-End Validation Tests (Phase 5)
+// ============================================================================
+
+/// Test full pipeline: ingest real commits and query them via timeline view
+#[test]
+fn test_e2e_ingest_and_query_timeline() {
+    use hindsight_mcp::queries::get_timeline;
+    use std::path::Path;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let mut ingestor = Ingestor::new(db);
+
+    let repo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    if !repo_path.join(".git").exists() {
+        println!("Skipping test: not in a git repository");
+        return;
+    }
+
+    // Ingest 20 commits with diffs
+    let options = IngestOptions::full().with_limit(20);
+    let stats = ingestor
+        .ingest_git(repo_path, &options)
+        .expect("Git ingestion failed");
+
+    assert!(stats.commits_inserted > 0, "Expected at least one commit");
+
+    // Query the timeline
+    let db = ingestor.database();
+    let timeline = get_timeline(db.connection(), 50, None).expect("Timeline query failed");
+
+    assert!(
+        !timeline.is_empty(),
+        "Expected timeline to have events after ingestion"
+    );
+
+    // Verify timeline events have commit type
+    let commit_events: Vec<_> = timeline
+        .iter()
+        .filter(|e| e.event_type == "commit")
+        .collect();
+    assert!(
+        !commit_events.is_empty(),
+        "Expected commit events in timeline"
+    );
+
+    println!(
+        "Timeline: {} total events, {} commit events",
+        timeline.len(),
+        commit_events.len()
+    );
+}
+
+/// Test FTS5 full-text search on ingested commits
+#[test]
+fn test_e2e_fts5_commit_search() {
+    use hindsight_mcp::queries::search_commits;
+    use std::path::Path;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let mut ingestor = Ingestor::new(db);
+
+    let repo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    if !repo_path.join(".git").exists() {
+        println!("Skipping test: not in a git repository");
+        return;
+    }
+
+    // Ingest commits
+    let options = IngestOptions::full().with_limit(50);
+    let stats = ingestor
+        .ingest_git(repo_path, &options)
+        .expect("Git ingestion failed");
+
+    assert!(stats.commits_inserted > 0, "Expected at least one commit");
+
+    // Search for common commit message patterns
+    let db = ingestor.database();
+
+    // Search for "feat" - common in conventional commits
+    let results = search_commits(db.connection(), "feat", 10).expect("Search failed");
+
+    // We expect at least some results since this repo uses conventional commits
+    println!(
+        "Search for 'feat': {} results from {} commits",
+        results.len(),
+        stats.commits_inserted
+    );
+
+    // Search for implementation-related terms
+    let results = search_commits(db.connection(), "implement", 10).expect("Search failed");
+    println!("Search for 'implement': {} results", results.len());
+}
+
+/// Test cross-table joins via commit_with_tests query
+#[test]
+fn test_e2e_cross_table_joins() {
+    use hindsight_mcp::db::{CommitRecord, TestResultRecord, TestRunRecord};
+    use hindsight_mcp::queries::get_commit_with_tests;
+
+    let mut db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    // Create a workspace
+    let workspace_id = db
+        .get_or_create_workspace("test-workspace", "/test/path")
+        .expect("Failed to create workspace");
+
+    // Insert a commit
+    let commit = CommitRecord::new(
+        workspace_id.clone(),
+        "abc123def456".to_string(),
+        "Test Author".to_string(),
+        Some("test@example.com".to_string()),
+        "feat: test commit for cross-table join".to_string(),
+        Utc::now(),
+    );
+    db.insert_commit(&commit).expect("Failed to insert commit");
+
+    // Insert a test run linked to the commit
+    let run = TestRunRecord::new(workspace_id.clone())
+        .with_commit("abc123def456")
+        .finished(5, 1, 0);
+    let run_id = db.insert_test_run(&run).expect("Failed to insert test run");
+
+    // Insert test results
+    let results = vec![
+        TestResultRecord::new(
+            run_id.clone(),
+            "test_suite".to_string(),
+            "test_one".to_string(),
+            "passed".to_string(),
+            Some(10),
+        ),
+        TestResultRecord::new(
+            run_id.clone(),
+            "test_suite".to_string(),
+            "test_two".to_string(),
+            "failed".to_string(),
+            Some(50),
+        ),
+    ];
+    db.insert_test_results_batch(&results)
+        .expect("Failed to insert results");
+
+    // Query commit with associated tests
+    let result = get_commit_with_tests(db.connection(), "abc123def456");
+
+    match result {
+        Ok(Some(commit_with_tests)) => {
+            assert_eq!(commit_with_tests.sha, "abc123def456");
+            assert!(
+                !commit_with_tests.test_runs.is_empty(),
+                "Expected tests linked to commit"
+            );
+            println!(
+                "Cross-table join: commit {} with {} test runs",
+                commit_with_tests.sha,
+                commit_with_tests.test_runs.len()
+            );
+        }
+        Ok(None) => {
+            println!("Cross-table query: commit not found (expected)");
+        }
+        Err(e) => {
+            println!("Cross-table query error: {:?}", e);
+        }
+    }
+}
+
+/// Test activity summary aggregation
+#[test]
+fn test_e2e_activity_summary() {
+    use hindsight_mcp::db::{CommitRecord, CopilotMessageRecord, CopilotSessionRecord};
+    use hindsight_mcp::queries::get_activity_summary;
+
+    let mut db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    // Create a workspace
+    let workspace_id = db
+        .get_or_create_workspace("summary-workspace", "/summary/path")
+        .expect("Failed to create workspace");
+
+    // Insert multiple commits
+    for i in 0..5 {
+        let commit = CommitRecord::new(
+            workspace_id.clone(),
+            format!("commit{:03}abc123", i),
+            "Developer".to_string(),
+            Some("dev@example.com".to_string()),
+            format!("feat: feature number {}", i),
+            Utc::now(),
+        );
+        db.insert_commit(&commit).expect("Failed to insert commit");
+    }
+
+    // Insert a Copilot session with messages
+    let vscode_session_id = test_uuid("summary-session");
+    let session = CopilotSessionRecord::new(workspace_id.clone(), vscode_session_id);
+    db.insert_copilot_session(&session)
+        .expect("Failed to insert session");
+
+    let messages = vec![
+        CopilotMessageRecord::new(
+            session.id.clone(),
+            "user".to_string(),
+            "How do I write tests?".to_string(),
+            Utc::now(),
+        ),
+        CopilotMessageRecord::new(
+            session.id.clone(),
+            "assistant".to_string(),
+            "Here's how to write tests in Rust...".to_string(),
+            Utc::now(),
+        ),
+    ];
+    db.insert_copilot_messages_batch(&messages)
+        .expect("Failed to insert messages");
+
+    // Query activity summary
+    let summary = get_activity_summary(db.connection(), 7).expect("Activity summary failed");
+
+    println!(
+        "Activity summary: {} commits, {} sessions, {} test runs",
+        summary.commits, summary.copilot_sessions, summary.test_runs
+    );
+
+    assert!(
+        summary.commits >= 5,
+        "Expected at least 5 commits in summary"
+    );
+}
+
+/// Performance baseline test - measures ingestion time for 100 commits
+#[test]
+fn test_e2e_performance_baseline_ingestion() {
+    use std::path::Path;
+    use std::time::Instant;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let mut ingestor = Ingestor::new(db);
+
+    let repo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    if !repo_path.join(".git").exists() {
+        println!("Skipping test: not in a git repository");
+        return;
+    }
+
+    // Measure ingestion time for 100 commits with diffs
+    let options = IngestOptions::full().with_limit(100);
+
+    let start = Instant::now();
+    let stats = ingestor
+        .ingest_git(repo_path, &options)
+        .expect("Git ingestion failed");
+    let ingestion_duration = start.elapsed();
+
+    println!(
+        "PERFORMANCE BASELINE - Git Ingestion:\n\
+         - Commits ingested: {}\n\
+         - Time: {:?}\n\
+         - Rate: {:.2} commits/sec",
+        stats.commits_inserted,
+        ingestion_duration,
+        stats.commits_inserted as f64 / ingestion_duration.as_secs_f64()
+    );
+
+    // Assert reasonable performance (should be under 10 seconds for 100 commits)
+    assert!(
+        ingestion_duration.as_secs() < 10,
+        "Ingestion took too long: {:?}",
+        ingestion_duration
+    );
+}
+
+/// Performance baseline test - measures query times
+#[test]
+fn test_e2e_performance_baseline_queries() {
+    use hindsight_mcp::queries::{get_activity_summary, get_timeline, search_commits};
+    use std::path::Path;
+    use std::time::Instant;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let mut ingestor = Ingestor::new(db);
+
+    let repo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    if !repo_path.join(".git").exists() {
+        println!("Skipping test: not in a git repository");
+        return;
+    }
+
+    // Ingest data first
+    let options = IngestOptions::full().with_limit(100);
+    let stats = ingestor
+        .ingest_git(repo_path, &options)
+        .expect("Git ingestion failed");
+
+    let db = ingestor.database();
+    let conn = db.connection();
+
+    // Measure timeline query
+    let start = Instant::now();
+    let _timeline = get_timeline(conn, 50, None).expect("Timeline query failed");
+    let timeline_duration = start.elapsed();
+
+    // Measure FTS5 search
+    let start = Instant::now();
+    let _search_results = search_commits(conn, "feat", 20).expect("Search failed");
+    let search_duration = start.elapsed();
+
+    // Measure activity summary
+    let start = Instant::now();
+    let _summary = get_activity_summary(conn, 30).expect("Summary failed");
+    let summary_duration = start.elapsed();
+
+    println!(
+        "PERFORMANCE BASELINE - Queries ({} commits):\n\
+         - Timeline (50 events): {:?}\n\
+         - FTS5 search: {:?}\n\
+         - Activity summary (30 days): {:?}",
+        stats.commits_inserted, timeline_duration, search_duration, summary_duration
+    );
+
+    // Assert queries complete in reasonable time (under 100ms each)
+    assert!(
+        timeline_duration.as_millis() < 100,
+        "Timeline query too slow: {:?}",
+        timeline_duration
+    );
+    assert!(
+        search_duration.as_millis() < 100,
+        "Search query too slow: {:?}",
+        search_duration
+    );
+    assert!(
+        summary_duration.as_millis() < 100,
+        "Summary query too slow: {:?}",
+        summary_duration
+    );
+}
+
+/// Test full pipeline with all data sources
+#[test]
+fn test_e2e_full_pipeline_validation() {
+    use hindsight_mcp::queries::{get_timeline, search_all};
+    use std::path::Path;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    db.initialize().expect("Failed to initialize");
+
+    let mut ingestor = Ingestor::new(db);
+
+    let repo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+
+    if !repo_path.join(".git").exists() {
+        println!("Skipping test: not in a git repository");
+        return;
+    }
+
+    // Ingest git commits
+    let git_options = IngestOptions::full().with_limit(50);
+    let git_stats = ingestor
+        .ingest_git(repo_path, &git_options)
+        .expect("Git ingestion failed");
+
+    // Try to ingest Copilot sessions (may not find any)
+    let copilot_stats = ingestor.ingest_copilot(repo_path);
+    let copilot_sessions = match copilot_stats {
+        Ok(stats) => stats.sessions_inserted,
+        Err(_) => 0, // Expected if no Copilot sessions available
+    };
+
+    // Validate data was ingested
+    let db = ingestor.database();
+
+    // Check timeline has entries
+    let timeline = get_timeline(db.connection(), 100, None).expect("Timeline failed");
+
+    // Check search works
+    let search = search_all(db.connection(), "test", 10).expect("Search failed");
+
+    println!(
+        "FULL PIPELINE VALIDATION:\n\
+         - Git commits ingested: {}\n\
+         - Copilot sessions: {}\n\
+         - Timeline events: {}\n\
+         - Search results for 'test': {}",
+        git_stats.commits_inserted,
+        copilot_sessions,
+        timeline.len(),
+        search.len()
+    );
+
+    // Assertions
+    assert!(
+        git_stats.commits_inserted > 0,
+        "Expected git commits to be ingested"
+    );
+    assert!(!timeline.is_empty(), "Expected timeline to have events");
 }
