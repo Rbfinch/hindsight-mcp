@@ -5,13 +5,16 @@
 
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 /// Hindsight MCP Server - AI-assisted coding with development history
 #[derive(Parser, Debug, Clone)]
 #[command(name = "hindsight-mcp")]
 #[command(version, about, long_about = None)]
 pub struct Config {
+    /// Subcommand to run (defaults to MCP server mode)
+    #[command(subcommand)]
+    pub command: Option<Command>,
     /// Path to SQLite database file
     ///
     /// If the file doesn't exist, it will be created and initialized.
@@ -45,6 +48,27 @@ pub struct Config {
     /// Useful for testing or when connecting to an externally managed database.
     #[arg(long, default_value = "false")]
     pub skip_init: bool,
+}
+
+/// Available subcommands
+#[derive(Subcommand, Debug, Clone)]
+pub enum Command {
+    /// Ingest data from various sources
+    ///
+    /// Use this command to ingest test results from nextest output.
+    /// Test output should be piped from stdin.
+    ///
+    /// Example:
+    ///   NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json | hindsight-mcp ingest --tests
+    Ingest {
+        /// Ingest test results from stdin (nextest JSON format)
+        #[arg(long)]
+        tests: bool,
+
+        /// Git commit SHA to associate with test results
+        #[arg(long)]
+        commit: Option<String>,
+    },
 }
 
 impl Config {
@@ -122,6 +146,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            command: None,
             database: None,
             workspace: None,
             verbose: false,
@@ -158,6 +183,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
+        assert!(config.command.is_none());
         assert!(config.database.is_none());
         assert!(config.workspace.is_none());
         assert!(!config.verbose);

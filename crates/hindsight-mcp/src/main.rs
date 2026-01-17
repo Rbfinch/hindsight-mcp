@@ -11,6 +11,8 @@
 //!
 //! The server communicates over stdio using the MCP (Model Context Protocol).
 
+use std::io::{self, BufRead};
+
 use clap::Parser;
 use rust_mcp_sdk::mcp_server::{McpServerOptions, ToMcpServerHandler, server_runtime};
 use rust_mcp_sdk::schema::{
@@ -20,8 +22,9 @@ use rust_mcp_sdk::{McpServer, StdioTransport, TransportOptions};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-use hindsight_mcp::config::Config;
+use hindsight_mcp::config::{Command, Config};
 use hindsight_mcp::db::Database;
+use hindsight_mcp::ingest::Ingestor;
 use hindsight_mcp::server::HindsightServer;
 
 /// Initialize the tracing/logging subsystem
@@ -116,6 +119,81 @@ async fn main() -> anyhow::Result<()> {
     // Parse configuration from CLI arguments and environment
     let config = Config::parse();
 
+    // Handle subcommands
+    match &config.command {
+        Some(Command::Ingest { tests, commit }) => {
+            run_ingest(&config, *tests, commit.clone()).await
+        }
+        None => {
+            // Default: run MCP server
+            run_server(config).await
+        }
+    }
+}
+
+/// Run the test ingestion command
+async fn run_ingest(config: &Config, tests: bool, commit: Option<String>) -> anyhow::Result<()> {
+    if !tests {
+        eprintln!("Error: No ingestion source specified. Use --tests to ingest test results.");
+        std::process::exit(1);
+    }
+
+    // Initialize simple logging for CLI mode
+    let filter = EnvFilter::from_default_env().add_directive(config.log_level().into());
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .with_ansi(true)
+        .init();
+
+    // Get workspace path
+    let workspace = config.workspace_path().ok_or_else(|| {
+        anyhow::anyhow!("Workspace path is required. Use --workspace or set HINDSIGHT_WORKSPACE")
+    })?;
+
+    info!(workspace = %workspace.display(), "Starting test ingestion");
+
+    // Read stdin
+    let stdin = io::stdin();
+    let mut input = String::new();
+    for line in stdin.lock().lines() {
+        let line = line?;
+        input.push_str(&line);
+        input.push('\n');
+    }
+
+    if input.trim().is_empty() {
+        eprintln!("Error: No input received from stdin. Pipe nextest JSON output.");
+        eprintln!(
+            "Example: NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json | hindsight-mcp ingest --tests"
+        );
+        std::process::exit(1);
+    }
+
+    // Initialize database
+    let db = init_database(config)?;
+
+    // Run ingestion
+    let mut ingestor = Ingestor::new(db);
+    let stats = ingestor.ingest_tests(&workspace, &input, commit.as_deref())?;
+
+    info!(
+        tests_inserted = stats.test_results_inserted,
+        runs_inserted = stats.test_runs_inserted,
+        "Test ingestion complete"
+    );
+
+    println!(
+        "Ingested {} test results in {} test run(s)",
+        stats.test_results_inserted, stats.test_runs_inserted
+    );
+
+    Ok(())
+}
+
+/// Run the MCP server
+async fn run_server(config: Config) -> anyhow::Result<()> {
     // Initialize logging - must write to stderr to not interfere with MCP stdio
     init_logging(&config);
 
@@ -190,6 +268,7 @@ mod tests {
     #[test]
     fn test_config_default_database_path() {
         let config = Config {
+            command: None,
             database: None,
             workspace: None,
             verbose: false,
@@ -205,6 +284,7 @@ mod tests {
     fn test_config_custom_database_path() {
         let custom_path = PathBuf::from("/custom/path/db.sqlite");
         let config = Config {
+            command: None,
             database: Some(custom_path.clone()),
             workspace: None,
             verbose: false,
@@ -218,6 +298,7 @@ mod tests {
     #[test]
     fn test_config_workspace_path_fallback() {
         let config = Config {
+            command: None,
             database: None,
             workspace: None,
             verbose: false,

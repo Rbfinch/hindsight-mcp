@@ -83,7 +83,11 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 ### Command Line Options
 
 ```
-hindsight-mcp [OPTIONS]
+hindsight-mcp [OPTIONS] [COMMAND]
+
+Commands:
+  ingest    Ingest data from various sources (e.g., test results)
+  help      Print help for commands
 
 Options:
   -d, --database <PATH>   Path to SQLite database file
@@ -192,6 +196,43 @@ Ingests cargo-nextest output:
 - Test run metadata (pass/fail counts)
 - Individual test outcomes
 - Duration and output capture
+
+#### Ingesting Test Results
+
+Test results require piping nextest JSON output to the CLI:
+
+```bash
+# Run tests and ingest results
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
+  hindsight-mcp --database ~/.hindsight/hindsight.db --workspace /path/to/project ingest --tests
+
+# Ingest specific test targets
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --package my-crate --message-format libtest-json 2>/dev/null | \
+  hindsight-mcp --database ~/.hindsight/hindsight.db --workspace /path/to/project ingest --tests
+
+# Associate test run with a specific commit
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
+  hindsight-mcp --workspace /path/to/project ingest --tests --commit abc123def
+```
+
+**Note:** The `2>/dev/null` redirects compiler warnings/errors to avoid mixing them with the JSON output.
+
+#### Querying Failing Tests
+
+After ingesting test results, query for failures using the MCP tool or Copilot:
+
+```
+# Ask Copilot:
+"What tests are failing?"
+"Show me the failing test output"
+"Which tests failed in the last run?"
+```
+
+The `hindsight_failing_tests` tool returns:
+- Test name and suite
+- Duration and timestamp
+- Failure output (panic messages, assertion errors)
+- Associated commit SHA (if linked)
 
 ### GitHub Copilot Sessions
 
