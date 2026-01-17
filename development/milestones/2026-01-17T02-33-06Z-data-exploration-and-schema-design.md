@@ -34,8 +34,9 @@
 | Test logs generated | JSON format from nextest | ✅ Fixtures created |
 | Git log format documented | Complete schema mapping | ✅ Explored via git2 |
 | Copilot log format documented | Complete schema mapping | ✅ Fixtures created |
-| SQLite schema designed | All tables, indexes, FKs | ✅ Complete |
-| Schema supports SQL joins | Cross-table queries work | ⏳ Pending validation |
+| SQLite schema designed | All tables, indexes, FKs | ✅ 302 lines + FTS5 |
+| Schema supports SQL joins | Cross-table queries work | ✅ Views + query helpers |
+| Migration system | Version tracking | ✅ migrations.rs |
 
 ---
 
@@ -371,59 +372,82 @@ cargo nextest run --workspace
 
 ### Phase 3: Design SQLite Schema (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-17
 **Goal**: Create a normalized SQLite schema for all data sources
 **Dependencies**: Phase 2
 
 #### Tasks
 
-1. **Core schema tables** (~100 lines)
+1. **Core schema tables** (~302 lines) ✅
    - `workspaces` - Track monitored workspaces
    - `commits` - Git commits with JSON diff data
    - `test_runs` - Test execution sessions
    - `test_results` - Individual test outcomes
    - `copilot_sessions` - Chat sessions
    - `copilot_messages` - Individual messages
+   - `schema_migrations` - Version tracking
 
-2. **Indexing strategy** (~30 lines)
-   - Primary keys using UUIDs
-   - Foreign key relationships
+2. **Indexing strategy** (~20 indexes) ✅
+   - Primary keys using TEXT UUIDs
+   - Foreign key relationships with ON DELETE CASCADE
    - Timestamp indexes for range queries
-   - Full-text search indexes for content
+   - FTS5 full-text search for commits and messages
 
-3. **JSON columns design** (~20 lines)
+3. **JSON columns design** ✅
    - `commit.diff_json` - File changes as JSON
+   - `commit.parents_json` - Parent SHA array
+   - `test_run.metadata_json` - Build metadata
    - `test_result.output_json` - stdout/stderr
+   - `copilot_session.metadata_json` - Session info
    - `copilot_message.variables_json` - Attached context
 
-4. **Schema migration system** (~50 lines)
-   - Version tracking table
-   - Up/down migration scripts
-   - Schema validation
+4. **Schema migration system** (~200 lines) ✅
+   - `migrations.rs` - Version tracking and migration functions
+   - `get_version()`, `migrate()`, `rollback_to()`, `is_up_to_date()`
+   - Migration struct with version, name, up/down SQL
+   - MIGRATIONS static array with versioned migrations
+
+5. **Query helper module** (~728 lines) ✅
+   - `queries.rs` - High-level query functions
+   - `get_timeline()` - Unified activity timeline
+   - `search_commits()` / `search_messages()` - FTS5 search
+   - `get_failing_tests()` - View-based query
+   - `get_activity_summary()` - Aggregate statistics
+   - `get_commit_with_tests()` - Join query
+
+6. **Views for common queries** ✅
+   - `timeline` - Unified view across commits, tests, copilot
+   - `failing_tests` - Failed test results with run info
+   - `recent_activity` - Summary by workspace and type
 
 #### Deliverables
 
-- `crates/hindsight-mcp/src/db.rs` - Full schema implementation
-- `crates/hindsight-mcp/src/schema.sql` - Raw SQL schema file
-- `crates/hindsight-mcp/src/migrations/` - Migration scripts
+- `crates/hindsight-mcp/src/schema.sql` - Comprehensive SQL schema (302 lines) ✅
+- `crates/hindsight-mcp/src/migrations.rs` - Migration system (200 lines) ✅
+- `crates/hindsight-mcp/src/queries.rs` - Query helpers (728 lines) ✅
+- `crates/hindsight-mcp/src/db.rs` - Updated to use migrations ✅
 
 #### Validation Gate
 
 ```bash
-cargo nextest run -p hindsight-mcp -- db
-sqlite3 :memory: < crates/hindsight-mcp/src/schema.sql
+cargo nextest run -p hindsight-mcp
+# Result: 46 tests run: 46 passed, 0 skipped
 ```
 
 #### Success Criteria
 
-- [ ] All tables have UUID primary keys
-- [ ] All timestamps in ISO 8601 format
-- [ ] Foreign key relationships defined
-- [ ] JSON columns for complex data
-- [ ] Indexes on frequently queried columns
-- [ ] Example JOIN queries documented
+- [x] All tables have TEXT UUID primary keys
+- [x] All timestamps in ISO 8601 format
+- [x] Foreign key relationships defined
+- [x] JSON columns for complex data
+- [x] 20+ indexes on frequently queried columns
+- [x] FTS5 full-text search with triggers
+- [x] Views for common queries
+- [x] Migration system with version tracking
+- [x] Query helper functions with tests
 
-**Commit**: `feat(db): implement SQLite schema for development history`
+**Commit**: `feat(db): implement SQLite schema with migrations and FTS5`
 
 ---
 

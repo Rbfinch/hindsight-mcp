@@ -3,7 +3,8 @@
 //! This module provides SQLite database operations for storing and querying
 //! development history data including git commits, test results, and Copilot sessions.
 
-use rusqlite::{Connection, Result as SqliteResult};
+use crate::migrations;
+use rusqlite::Connection;
 use thiserror::Error;
 
 /// Database errors
@@ -12,6 +13,10 @@ pub enum DbError {
     /// SQLite error
     #[error("SQLite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
+
+    /// Migration error
+    #[error("Migration error: {0}")]
+    Migration(#[from] migrations::MigrationError),
 
     /// Database not initialized
     #[error("Database not initialized")]
@@ -48,25 +53,28 @@ impl Database {
         Ok(Self { conn })
     }
 
-    /// Initialize the database schema
+    /// Initialize the database schema using migrations
     ///
     /// # Errors
     ///
     /// Returns an error if the schema cannot be created.
     pub fn initialize(&self) -> Result<(), DbError> {
-        self.conn.execute_batch(SCHEMA)?;
+        migrations::migrate(&self.conn)?;
         Ok(())
     }
 
-    /// Check if the database is initialized
+    /// Check if the database is initialized and up to date
     pub fn is_initialized(&self) -> bool {
-        self.conn
-            .query_row(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='workspaces'",
-                [],
-                |_| Ok(()),
-            )
-            .is_ok()
+        migrations::is_up_to_date(&self.conn)
+    }
+
+    /// Get the current schema version
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the version cannot be read.
+    pub fn schema_version(&self) -> Result<i32, DbError> {
+        Ok(migrations::get_version(&self.conn)?)
     }
 
     /// Get the underlying connection (for advanced queries)
@@ -86,93 +94,6 @@ impl Database {
         Ok(count)
     }
 }
-
-/// Core database schema
-const SCHEMA: &str = r#"
--- Workspaces table (root entity)
-CREATE TABLE IF NOT EXISTS workspaces (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    path TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
--- Git commits
-CREATE TABLE IF NOT EXISTS commits (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    sha TEXT NOT NULL,
-    author TEXT NOT NULL,
-    author_email TEXT,
-    message TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    parents_json TEXT,
-    diff_json TEXT,
-    created_at TEXT NOT NULL,
-    UNIQUE(workspace_id, sha)
-);
-
--- Test runs (single nextest execution)
-CREATE TABLE IF NOT EXISTS test_runs (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    commit_sha TEXT,
-    started_at TEXT NOT NULL,
-    finished_at TEXT,
-    passed_count INTEGER NOT NULL DEFAULT 0,
-    failed_count INTEGER NOT NULL DEFAULT 0,
-    ignored_count INTEGER NOT NULL DEFAULT 0,
-    metadata_json TEXT
-);
-
--- Individual test results
-CREATE TABLE IF NOT EXISTS test_results (
-    id TEXT PRIMARY KEY,
-    run_id TEXT NOT NULL REFERENCES test_runs(id),
-    suite_name TEXT NOT NULL,
-    test_name TEXT NOT NULL,
-    outcome TEXT NOT NULL,
-    duration_ms INTEGER,
-    output_json TEXT,
-    created_at TEXT NOT NULL
-);
-
--- Copilot chat sessions
-CREATE TABLE IF NOT EXISTS copilot_sessions (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    vscode_session_id TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    metadata_json TEXT,
-    UNIQUE(workspace_id, vscode_session_id)
-);
-
--- Copilot messages
-CREATE TABLE IF NOT EXISTS copilot_messages (
-    id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL REFERENCES copilot_sessions(id),
-    request_id TEXT,
-    role TEXT NOT NULL,
-    content TEXT NOT NULL,
-    variables_json TEXT,
-    timestamp TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_commits_workspace ON commits(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_commits_timestamp ON commits(timestamp);
-CREATE INDEX IF NOT EXISTS idx_commits_sha ON commits(sha);
-CREATE INDEX IF NOT EXISTS idx_test_runs_workspace ON test_runs(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_test_runs_started ON test_runs(started_at);
-CREATE INDEX IF NOT EXISTS idx_test_results_run ON test_results(run_id);
-CREATE INDEX IF NOT EXISTS idx_test_results_outcome ON test_results(outcome);
-CREATE INDEX IF NOT EXISTS idx_copilot_sessions_workspace ON copilot_sessions(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_copilot_messages_session ON copilot_messages(session_id);
-CREATE INDEX IF NOT EXISTS idx_copilot_messages_timestamp ON copilot_messages(timestamp);
-"#;
 
 #[cfg(test)]
 mod tests {
@@ -369,6 +290,62 @@ mod tests {
                 )
                 .expect("query should succeed");
             assert_eq!(exists, 1, "Index {index} should exist");
+        }
+    }
+
+    #[test]
+    fn test_database_schema_version() {
+        let db = Database::in_memory().expect("should create db");
+
+        // Before initialization, version should be 0
+        assert_eq!(db.schema_version().expect("version"), 0);
+
+        db.initialize().expect("should initialize");
+
+        // After initialization, version should match CURRENT_VERSION
+        assert_eq!(
+            db.schema_version().expect("version"),
+            crate::migrations::CURRENT_VERSION
+        );
+    }
+
+    #[test]
+    fn test_database_fts_tables_created() {
+        let db = Database::in_memory().expect("should create db");
+        db.initialize().expect("should initialize");
+
+        let fts_tables = vec!["commits_fts", "copilot_messages_fts"];
+
+        for table in fts_tables {
+            let exists: i32 = db
+                .connection()
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+                    [table],
+                    |row| row.get(0),
+                )
+                .expect("query should succeed");
+            assert_eq!(exists, 1, "FTS table {table} should exist");
+        }
+    }
+
+    #[test]
+    fn test_database_views_created() {
+        let db = Database::in_memory().expect("should create db");
+        db.initialize().expect("should initialize");
+
+        let views = vec!["timeline", "failing_tests", "recent_activity"];
+
+        for view in views {
+            let exists: i32 = db
+                .connection()
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name=?",
+                    [view],
+                    |row| row.get(0),
+                )
+                .expect("query should succeed");
+            assert_eq!(exists, 1, "View {view} should exist");
         }
     }
 }

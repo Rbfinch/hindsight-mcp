@@ -6,6 +6,8 @@
 use tracing::info;
 
 mod db;
+mod migrations;
+mod queries;
 mod server;
 
 fn main() {
