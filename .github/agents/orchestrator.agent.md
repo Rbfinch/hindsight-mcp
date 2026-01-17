@@ -84,9 +84,30 @@ When creating a plan, structure it as:
    - Success Criteria: ...
 ```
 
+## Development Milestones
+
+For larger development efforts, organise work into **Milestones** containing multiple **Phases**.
+
+**For detailed milestone templates and guidance**, use the `milestone-creator` skill located in `.github/skills/milestone-creator/`.
+
+### Milestone File Naming
+
+- Location: `development/milestones/`
+- Format: `<ISO-8601-datetime>-<milestone-name>.md`
+- Example: `2026-01-17T14-30-00Z-implement-git-parser.md`
+
+### Phase Completion Workflow
+
+1. Update phase status to `completed` in the milestone file
+2. Hand off to **Commit Agent** with phase context
+3. Commit agent commits all changes and pushes to `dev`
+4. Begin next phase
+
 ## Important Notes
 
 - **Never** write implementation code yourself - delegate to the Implementation Agent
 - **Always** ensure context is gathered before implementation begins
 - **Verify** all implementations through the Verification Agent before considering complete
 - Request human intervention when requirements are ambiguous or when critical decisions need approval
+- **Update milestone status** before each commit to maintain accurate progress tracking
+- **Use the milestone-creator skill** for comprehensive milestone templates
