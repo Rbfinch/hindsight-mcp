@@ -58,32 +58,33 @@
 
 ### Phase 0: Git Log Parsing (1.5 sessions)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-17
 **Goal**: Implement `hindsight-git::parser` to extract commits from a git repository
 
 #### Tasks
 
-1. **Repository access** (~60 lines)
+1. **Repository access** (~60 lines) ✅
    - Open repository from path
    - Handle bare vs worktree repos
    - Error handling for invalid paths
 
-2. **Commit walker** (~80 lines)
+2. **Commit walker** (~80 lines) ✅
    - Walk commit history from HEAD
    - Support limiting by count or date range
    - Handle merge commits correctly
 
-3. **Commit extraction** (~100 lines)
+3. **Commit extraction** (~100 lines) ✅
    - Extract SHA, author, email, message, timestamp
    - Parse parent SHAs
    - Convert to `Commit` struct
 
-4. **Diff parsing** (~120 lines)
+4. **Diff parsing** (~120 lines) ✅
    - Compute diff between commit and parent
    - Extract file paths, insertions, deletions
    - Generate `diff_json` structure
 
-5. **Unit tests** (~80 lines)
+5. **Unit tests** (~80 lines) ✅
    - Test repository opening
    - Test commit walking limits
    - Test diff extraction
@@ -91,23 +92,23 @@
 
 #### Deliverables
 
-- `crates/hindsight-git/src/parser.rs` - Full implementation (~300 lines)
-- `crates/hindsight-git/src/commit.rs` - Extended with `from_git2()` method
+- `crates/hindsight-git/src/parser.rs` - Full implementation (~340 lines) ✅
+- `crates/hindsight-git/src/lib.rs` - Extended with exports ✅
 
 #### Validation Gate
 
 ```bash
-cargo nextest run -p hindsight-git
-cargo clippy -p hindsight-git
+cargo nextest run -p hindsight-git  # ✅ 42 tests pass
+cargo clippy -p hindsight-git       # ✅ No warnings
 ```
 
 #### Success Criteria
 
-- [ ] Can open git repository from path
-- [ ] Can walk N most recent commits
-- [ ] Can extract all commit metadata
-- [ ] Can parse diffs to JSON structure
-- [ ] ≥8 unit tests pass
+- [x] Can open git repository from path
+- [x] Can walk N most recent commits
+- [x] Can extract all commit metadata
+- [x] Can parse diffs to JSON structure
+- [x] ≥8 unit tests pass (14 new tests)
 
 **Commit**: `feat(git): implement git log parsing with git2`
 
