@@ -16,7 +16,7 @@ use rust_mcp_sdk::schema::{
 };
 use serde_json::{Map, Value, json};
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 use crate::db::Database;
 use crate::handlers::{self, HandlerError};
@@ -306,8 +306,11 @@ impl ServerHandler for HindsightServer {
         _params: Option<PaginatedRequestParams>,
         _runtime: Arc<dyn McpServer>,
     ) -> Result<ListToolsResult, RpcError> {
+        let tools = Self::build_tools();
+        debug!(tool_count = tools.len(), "Listing available tools");
+        trace!(tools = ?tools.iter().map(|t| &t.name).collect::<Vec<_>>(), "Tool names");
         Ok(ListToolsResult {
-            tools: Self::build_tools(),
+            tools,
             meta: None,
             next_cursor: None,
         })
@@ -320,6 +323,7 @@ impl ServerHandler for HindsightServer {
         _runtime: Arc<dyn McpServer>,
     ) -> Result<CallToolResult, CallToolError> {
         debug!(tool = %params.name, "Calling tool");
+        trace!(tool = %params.name, args = ?params.arguments, "Tool arguments");
 
         let args = params.arguments;
 
@@ -370,6 +374,8 @@ impl ServerHandler for HindsightServer {
         match result {
             Ok(value) => {
                 let json_str = serde_json::to_string_pretty(&value).unwrap_or_default();
+                debug!(tool = %params.name, response_len = json_str.len(), "Tool completed successfully");
+                trace!(tool = %params.name, response = %json_str, "Tool response");
                 Ok(CallToolResult::text_content(vec![TextContent::new(
                     json_str, None, None,
                 )]))

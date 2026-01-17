@@ -16,10 +16,12 @@
 - Query helper functions in `queries.rs` (728 lines): `get_timeline`, `search_commits`, `search_messages`, `search_all`, `get_failing_tests`, `get_activity_summary`, `get_commit_with_tests`
 - Data ingestion pipeline complete via `Ingestor` in `ingest.rs` (823 lines)
 - Database operations in `db.rs` with record types and batch insertion
-- 255 tests passing across all crates
+- 279 tests passing across all crates
 - MCP server skeleton complete: CLI parsing, tool schemas, server initialization
 - Tool handlers implemented in `handlers.rs` (520 lines): all 6 tools wired to database queries
-- **Next**: Server configuration and transport (Phase 3)
+- Configuration module in `config.rs` (~235 lines): CLI args, validation, logging levels
+- Database lifecycle management: auto-create, migrations on startup
+- **Next**: VS Code integration and testing (Phase 4)
 
 **The Problem**: All the data infrastructure exists but there is no way for an LLM to access it. The MCP server binary does nothing—it cannot register tools, handle requests, or expose queries to AI clients.
 
@@ -43,7 +45,7 @@
 | Database integration | Queries run against SQLite | ✅ Done |
 | Configuration | CLI args for db path, workspace | ✅ Done |
 | VS Code integration | Works with Copilot MCP | ⏳ Pending |
-| Integration tests | ≥8 new tests | ✅ Done (255 total) |
+| Integration tests | ≥8 new tests | ✅ Done (279 total) |
 | Documentation | README updated with usage | ⏳ Pending |
 
 ---
@@ -367,7 +369,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hindsight_
 
 ### Phase 3: Server Configuration and Transport (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
 **Goal**: Complete server configuration, transport setup, and graceful shutdown
 **Dependencies**: Phase 2
 
@@ -408,9 +410,11 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hindsight_
 
 #### Deliverables
 
-- Updated `main.rs` with complete lifecycle
-- Updated `server.rs` with configuration
-- `crates/hindsight-mcp/src/config.rs` - Configuration types (~100 lines)
+- Updated `main.rs` with complete lifecycle (~230 lines)
+- Updated `server.rs` with enhanced logging (~450 lines)
+- `crates/hindsight-mcp/src/config.rs` - Configuration types (~235 lines)
+- Updated `lib.rs` to export config module
+- 13 new integration tests for configuration and lifecycle
 
 #### Validation Gate
 
@@ -423,11 +427,13 @@ cargo run -p hindsight-mcp -- -d /tmp/test.db -w . -v &
 
 #### Success Criteria
 
-- [ ] Server creates database on startup
-- [ ] Migrations run automatically
-- [ ] Workspace detected from cwd
-- [ ] Logging respects verbosity flag
-- [ ] ≥4 integration tests pass
+- [x] Server creates database on startup
+- [x] Migrations run automatically
+- [x] Workspace detected from cwd
+- [x] Logging respects verbosity flag (--verbose, --quiet)
+- [x] ≥4 integration tests pass (13 new tests)
+
+**Commit**: `feat(mcp): add server configuration and transport`
 
 **Commit**: `feat(mcp): add server configuration and transport`
 

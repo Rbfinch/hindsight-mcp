@@ -11,122 +11,85 @@
 //!
 //! The server communicates over stdio using the MCP (Model Context Protocol).
 
-use std::path::PathBuf;
-
 use clap::Parser;
 use rust_mcp_sdk::mcp_server::{McpServerOptions, ToMcpServerHandler, server_runtime};
 use rust_mcp_sdk::schema::{
     Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerCapabilitiesTools,
 };
 use rust_mcp_sdk::{McpServer, StdioTransport, TransportOptions};
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 
+use hindsight_mcp::config::Config;
 use hindsight_mcp::db::Database;
 use hindsight_mcp::server::HindsightServer;
 
-/// Hindsight MCP Server - AI-assisted coding with development history
-#[derive(Parser, Debug)]
-#[command(name = "hindsight-mcp")]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// Path to SQLite database file
-    ///
-    /// If the file doesn't exist, it will be created and initialized.
-    #[arg(short, long, env = "HINDSIGHT_DATABASE")]
-    database: Option<PathBuf>,
+/// Initialize the tracing/logging subsystem
+///
+/// Logs are written to stderr to avoid interfering with MCP stdio transport.
+fn init_logging(config: &Config) {
+    let level = config.log_level();
 
-    /// Default workspace path for queries
-    ///
-    /// This is used as the default when tools don't specify a workspace.
-    /// Defaults to the current working directory.
-    #[arg(short, long, env = "HINDSIGHT_WORKSPACE")]
-    workspace: Option<PathBuf>,
-
-    /// Enable verbose logging (debug level)
-    #[arg(short, long, default_value = "false")]
-    verbose: bool,
-}
-
-impl Args {
-    /// Get the database path, using a default if not specified
-    fn database_path(&self) -> PathBuf {
-        self.database.clone().unwrap_or_else(|| {
-            // Default to ~/.hindsight/hindsight.db
-            dirs::data_local_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("hindsight")
-                .join("hindsight.db")
-        })
-    }
-
-    /// Get the workspace path, using current directory as default
-    fn workspace_path(&self) -> Option<PathBuf> {
-        self.workspace
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-    }
-}
-
-fn init_logging(verbose: bool) {
-    let filter = if verbose {
-        EnvFilter::from_default_env().add_directive(tracing::Level::DEBUG.into())
-    } else {
-        EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into())
-    };
+    let filter = EnvFilter::from_default_env().add_directive(level.into());
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
         .with_ansi(false)
+        .with_target(config.verbose)
+        .with_thread_ids(config.verbose)
         .init();
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+/// Initialize the database, running migrations if needed
+fn init_database(config: &Config) -> anyhow::Result<Database> {
+    let db_path = config.database_path();
 
-    // Initialize logging - must write to stderr to not interfere with MCP stdio
-    init_logging(args.verbose);
-
-    let db_path = args.database_path();
-    let workspace = args.workspace_path();
-
-    info!(
-        database = %db_path.display(),
-        workspace = ?workspace.as_ref().map(|p| p.display().to_string()),
-        "Starting hindsight-mcp server"
-    );
-
-    // Ensure database directory exists
-    if let Some(parent) = db_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    debug!(path = %db_path.display(), "Opening database");
 
     // Open or create database
     let db = Database::open(&db_path).map_err(|e| {
         error!(error = %e, path = %db_path.display(), "Failed to open database");
-        e
+        anyhow::anyhow!("Failed to open database: {}", e)
     })?;
 
-    info!("Database initialized successfully");
+    // Check if initialization is needed
+    if config.skip_init {
+        debug!("Skipping database initialization (--skip-init)");
+        if !db.is_initialized() {
+            warn!("Database may not be initialized - queries may fail");
+        }
+    } else if !db.is_initialized() {
+        info!("Initializing database schema...");
+        db.initialize().map_err(|e| {
+            error!(error = %e, "Failed to initialize database schema");
+            anyhow::anyhow!("Failed to initialize database: {}", e)
+        })?;
+        info!("Database schema initialized successfully");
+    } else {
+        let version = db.schema_version().unwrap_or(0);
+        debug!(version = version, "Database schema up to date");
+    }
 
-    // Create handler instance with db path for ingestion support
-    let handler = HindsightServer::new(db, workspace).with_db_path(db_path);
+    Ok(db)
+}
 
-    // Define server details and capabilities
-    let server_details = InitializeResult {
+/// Build the MCP server details and capabilities
+fn build_server_details() -> InitializeResult {
+    InitializeResult {
         server_info: Implementation {
             name: "hindsight-mcp".into(),
             version: env!("CARGO_PKG_VERSION").into(),
             title: Some("Hindsight MCP Server".into()),
             description: Some(
                 "MCP server providing access to development history including \
-                 git commits, test results, and GitHub Copilot sessions."
+                 git commits, test results, and GitHub Copilot sessions. \
+                 Use the available tools to search, explore, and analyze \
+                 your development activity."
                     .into(),
             ),
             icons: vec![],
-            website_url: Some("https://github.com/nicrosby/hindsight-mcp".into()),
+            website_url: Some("https://github.com/Rbfinch/hindsight-mcp".into()),
         },
         capabilities: ServerCapabilities {
             tools: Some(ServerCapabilitiesTools { list_changed: None }),
@@ -134,13 +97,62 @@ async fn main() -> anyhow::Result<()> {
         },
         protocol_version: ProtocolVersion::V2025_11_25.into(),
         instructions: Some(
-            "Use the available tools to search, explore, and analyze your development activity. \
-             Available tools: hindsight_timeline, hindsight_search, hindsight_failing_tests, \
-             hindsight_activity_summary, hindsight_commit_details, hindsight_ingest."
+            "Hindsight MCP provides tools to explore your development history:\n\n\
+             - hindsight_timeline: View chronological development activity\n\
+             - hindsight_search: Full-text search across commits and messages\n\
+             - hindsight_failing_tests: Get currently failing tests\n\
+             - hindsight_activity_summary: Aggregate activity statistics\n\
+             - hindsight_commit_details: Detailed commit information\n\
+             - hindsight_ingest: Trigger data ingestion from sources\n\n\
+             All tools support optional workspace filtering."
                 .into(),
         ),
         meta: None,
-    };
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Parse configuration from CLI arguments and environment
+    let config = Config::parse();
+
+    // Initialize logging - must write to stderr to not interfere with MCP stdio
+    init_logging(&config);
+
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        "Starting hindsight-mcp server"
+    );
+
+    // Validate configuration
+    if let Err(e) = config.validate() {
+        error!(error = %e, "Configuration validation failed");
+        return Err(anyhow::anyhow!("Configuration error: {}", e));
+    }
+
+    let db_path = config.database_path();
+    let workspace = config.workspace_path();
+
+    debug!(
+        database = %db_path.display(),
+        workspace = ?workspace.as_ref().map(|p| p.display().to_string()),
+        verbose = config.verbose,
+        "Configuration loaded"
+    );
+
+    // Initialize database with migrations
+    let db = init_database(&config)?;
+
+    info!(
+        database = %db_path.display(),
+        "Database ready"
+    );
+
+    // Create handler instance with db path for ingestion support
+    let handler = HindsightServer::new(db, workspace).with_db_path(db_path);
+
+    // Build server details and capabilities
+    let server_details = build_server_details();
 
     // Create stdio transport
     let transport = StdioTransport::new(TransportOptions::default())
@@ -155,7 +167,7 @@ async fn main() -> anyhow::Result<()> {
         client_task_store: None,
     });
 
-    info!("MCP server started, waiting for requests...");
+    info!("MCP server ready, waiting for requests...");
 
     // Start the server and wait for it to complete
     if let Err(e) = server.start().await {
@@ -166,54 +178,69 @@ async fn main() -> anyhow::Result<()> {
         ));
     }
 
-    info!("MCP server shutting down");
+    info!("MCP server shutting down gracefully");
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
-    fn test_args_default_database_path() {
-        let args = Args {
+    fn test_config_default_database_path() {
+        let config = Config {
             database: None,
             workspace: None,
             verbose: false,
+            quiet: false,
+            skip_init: false,
         };
 
-        let path = args.database_path();
+        let path = config.database_path();
         assert!(path.to_string_lossy().contains("hindsight"));
     }
 
     #[test]
-    fn test_args_custom_database_path() {
+    fn test_config_custom_database_path() {
         let custom_path = PathBuf::from("/custom/path/db.sqlite");
-        let args = Args {
+        let config = Config {
             database: Some(custom_path.clone()),
             workspace: None,
             verbose: false,
+            quiet: false,
+            skip_init: false,
         };
 
-        assert_eq!(args.database_path(), custom_path);
+        assert_eq!(config.database_path(), custom_path);
     }
 
     #[test]
-    fn test_args_workspace_path_fallback() {
-        let args = Args {
+    fn test_config_workspace_path_fallback() {
+        let config = Config {
             database: None,
             workspace: None,
             verbose: false,
+            quiet: false,
+            skip_init: false,
         };
 
         // Should fallback to current directory
-        let workspace = args.workspace_path();
+        let workspace = config.workspace_path();
         assert!(workspace.is_some());
     }
 
     #[test]
     fn verify_cli() {
         use clap::CommandFactory;
-        Args::command().debug_assert();
+        Config::command().debug_assert();
+    }
+
+    #[test]
+    fn test_build_server_details() {
+        let details = build_server_details();
+        assert_eq!(details.server_info.name, "hindsight-mcp");
+        assert!(details.capabilities.tools.is_some());
+        assert!(details.instructions.is_some());
     }
 }

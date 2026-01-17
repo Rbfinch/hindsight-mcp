@@ -1169,3 +1169,210 @@ fn test_handler_search_empty_query_error() {
         Ok(_) => panic!("Expected error for empty query"),
     }
 }
+
+// ============================================================================
+// Configuration and Lifecycle Tests (Phase 3)
+// ============================================================================
+
+#[test]
+fn test_config_default_values() {
+    use hindsight_mcp::config::Config;
+
+    let config = Config::default();
+
+    assert!(config.database.is_none());
+    assert!(config.workspace.is_none());
+    assert!(!config.verbose);
+    assert!(!config.quiet);
+    assert!(!config.skip_init);
+}
+
+#[test]
+fn test_config_database_path_default() {
+    use hindsight_mcp::config::Config;
+
+    let config = Config::default();
+    let path = config.database_path();
+
+    // Should contain "hindsight" in the path
+    assert!(
+        path.to_string_lossy().contains("hindsight"),
+        "Database path should contain 'hindsight'"
+    );
+}
+
+#[test]
+fn test_config_database_path_custom() {
+    use hindsight_mcp::config::Config;
+    use std::path::PathBuf;
+
+    let custom = PathBuf::from("/custom/database.db");
+    let config = Config {
+        database: Some(custom.clone()),
+        ..Default::default()
+    };
+
+    assert_eq!(config.database_path(), custom);
+}
+
+#[test]
+fn test_config_workspace_detection() {
+    use hindsight_mcp::config::Config;
+
+    let config = Config::default();
+    let workspace = config.workspace_path();
+
+    // Should default to current directory
+    assert!(workspace.is_some(), "Should detect workspace from cwd");
+}
+
+#[test]
+fn test_config_log_levels() {
+    use hindsight_mcp::config::Config;
+
+    // Default: INFO
+    let config = Config::default();
+    assert_eq!(config.log_level(), tracing::Level::INFO);
+
+    // Verbose: DEBUG
+    let config = Config {
+        verbose: true,
+        ..Default::default()
+    };
+    assert_eq!(config.log_level(), tracing::Level::DEBUG);
+
+    // Quiet: WARN
+    let config = Config {
+        quiet: true,
+        ..Default::default()
+    };
+    assert_eq!(config.log_level(), tracing::Level::WARN);
+}
+
+#[test]
+fn test_config_validate_valid_workspace() {
+    use hindsight_mcp::config::Config;
+    use std::path::PathBuf;
+
+    let config = Config {
+        workspace: Some(PathBuf::from("/tmp")),
+        ..Default::default()
+    };
+
+    // /tmp exists on most systems
+    let result = config.validate();
+    assert!(result.is_ok(), "Validation should pass for /tmp");
+}
+
+#[test]
+fn test_config_validate_invalid_workspace() {
+    use hindsight_mcp::config::{Config, ConfigError};
+    use std::path::PathBuf;
+
+    let config = Config {
+        workspace: Some(PathBuf::from("/nonexistent/path/12345")),
+        ..Default::default()
+    };
+
+    let result = config.validate();
+    assert!(matches!(result, Err(ConfigError::WorkspaceNotFound(_))));
+}
+
+#[test]
+fn test_database_lifecycle_create_and_initialize() {
+    // Test that database can be created and initialized in one flow
+    let db = Database::in_memory().expect("Failed to create database");
+
+    assert!(
+        !db.is_initialized(),
+        "New database should not be initialized"
+    );
+
+    db.initialize().expect("Failed to initialize");
+
+    assert!(
+        db.is_initialized(),
+        "Database should be initialized after init"
+    );
+
+    // Verify schema version
+    let version = db.schema_version().expect("Failed to get version");
+    assert!(version >= 1, "Schema version should be at least 1");
+}
+
+#[test]
+fn test_database_lifecycle_double_initialize() {
+    // Test that calling initialize twice doesn't cause issues
+    let db = Database::in_memory().expect("Failed to create database");
+
+    db.initialize().expect("First init should succeed");
+    db.initialize().expect("Second init should be idempotent");
+
+    assert!(db.is_initialized());
+}
+
+#[test]
+fn test_database_file_persistence() {
+    use std::fs;
+
+    let temp_dir = std::env::temp_dir().join("hindsight_test_persistence");
+    let _ = fs::create_dir_all(&temp_dir);
+    let db_path = temp_dir.join("test.db");
+
+    // Clean up from previous runs
+    let _ = fs::remove_file(&db_path);
+
+    // Create and initialize
+    {
+        let db = Database::open(&db_path).expect("Failed to create database");
+        db.initialize().expect("Failed to initialize");
+
+        // Insert a commit to verify persistence
+        let workspace = hindsight_mcp::db::WorkspaceRecord::new(
+            "test-workspace".to_string(),
+            "/test/path".to_string(),
+        );
+        db.insert_workspace(&workspace)
+            .expect("Failed to insert workspace");
+    }
+
+    // Reopen and verify
+    {
+        let db = Database::open(&db_path).expect("Failed to reopen database");
+        assert!(db.is_initialized(), "Database should still be initialized");
+
+        let count = db.count("workspaces").expect("Failed to count");
+        assert_eq!(count, 1, "Workspace should persist");
+    }
+
+    // Cleanup
+    let _ = fs::remove_file(&db_path);
+    let _ = fs::remove_dir(&temp_dir);
+}
+
+#[test]
+fn test_server_creation_with_workspace() {
+    use hindsight_mcp::server::HindsightServer;
+    use std::path::PathBuf;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    let workspace = PathBuf::from("/test/workspace");
+
+    let server = HindsightServer::new(db, Some(workspace.clone()));
+
+    assert_eq!(server.workspace(), Some(&workspace));
+}
+
+#[test]
+fn test_server_creation_with_db_path() {
+    use hindsight_mcp::server::HindsightServer;
+    use std::path::PathBuf;
+
+    let db = Database::in_memory().expect("Failed to create database");
+    let db_path = PathBuf::from("/test/database.db");
+
+    let _server = HindsightServer::new(db, None).with_db_path(db_path);
+
+    // Server should be created successfully with db_path set
+    // (We can't easily test the internal state, but it shouldn't panic)
+}
