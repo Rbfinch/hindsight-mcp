@@ -26,6 +26,7 @@ pub enum MigrationError {
 pub const CURRENT_VERSION: i32 = 1;
 
 /// A database migration
+#[allow(dead_code)]
 pub struct Migration {
     /// Migration version number
     pub version: i32,
@@ -133,6 +134,7 @@ pub fn apply_migration(conn: &Connection, migration: &Migration) -> Result<(), M
 /// # Errors
 ///
 /// Returns an error if the rollback fails or if down migrations are not available.
+#[allow(dead_code)]
 pub fn rollback_to(conn: &Connection, target_version: i32) -> Result<Vec<i32>, MigrationError> {
     let current_version = get_version(conn)?;
     let mut rolled_back = Vec::new();

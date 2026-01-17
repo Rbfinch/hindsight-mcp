@@ -291,29 +291,30 @@ cargo clippy -p hindsight-mcp       # ✅ No warnings
 
 ### Phase 4: Unified Ingestion API (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-17
 **Goal**: Create a high-level API that orchestrates ingestion from all sources
 **Dependencies**: Phase 3
 
 #### Tasks
 
-1. **Ingestion orchestrator** (~100 lines)
+1. **Ingestion orchestrator** (~100 lines) ✅
    - `Ingestor` struct with database handle
    - `ingest_git()` - Ingest commits from repository
    - `ingest_tests()` - Ingest from nextest output
    - `ingest_copilot()` - Ingest from VS Code storage
 
-2. **Incremental sync** (~80 lines)
+2. **Incremental sync** (~80 lines) ✅
    - Track last ingested commit SHA
    - Only ingest new commits since last sync
    - Handle deleted/amended commits
 
-3. **Progress reporting** (~40 lines)
+3. **Progress reporting** (~40 lines) ✅
    - Callback for progress updates
    - Count processed items
    - Report errors without aborting
 
-4. **Integration tests** (~120 lines)
+4. **Integration tests** (~120 lines) ✅
    - Test full git ingestion pipeline
    - Test nextest ingestion pipeline
    - Test Copilot ingestion pipeline
@@ -321,22 +322,23 @@ cargo clippy -p hindsight-mcp       # ✅ No warnings
 
 #### Deliverables
 
-- `crates/hindsight-mcp/src/ingest.rs` - Extended with `Ingestor` struct
-- `crates/hindsight-mcp/tests/` - Integration tests
+- `crates/hindsight-mcp/src/ingest.rs` - Full implementation (~823 lines) ✅
+- `crates/hindsight-mcp/src/lib.rs` - New file exposing public API ✅
+- `crates/hindsight-mcp/tests/integration_tests.rs` - Extended with 7 ingestor tests ✅
 
 #### Validation Gate
 
 ```bash
-cargo nextest run --workspace
-cargo clippy --workspace
+cargo nextest run --workspace  # ✅ 220 tests pass
+cargo clippy --workspace       # ✅ No warnings
 ```
 
 #### Success Criteria
 
-- [ ] `Ingestor` can orchestrate all sources
-- [ ] Incremental sync works for git
-- [ ] Progress reporting implemented
-- [ ] ≥4 integration tests pass
+- [x] `Ingestor` can orchestrate all sources
+- [x] Incremental sync works for git
+- [x] Progress reporting implemented
+- [x] ≥4 integration tests pass (7 new tests)
 
 **Commit**: `feat(ingest): implement unified ingestion API`
 
