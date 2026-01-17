@@ -88,7 +88,7 @@ Use this structure for all milestone files:
 
 ```bash
 # Commands to verify phase completion
-cargo test --workspace
+cargo nextest run --workspace
 ./scripts/fast_test.sh
 ```
 

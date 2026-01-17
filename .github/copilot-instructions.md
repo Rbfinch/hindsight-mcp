@@ -41,7 +41,7 @@ This is a Cargo workspace with multiple crates:
 
 ```bash
 cargo build --workspace      # Build all crates
-cargo test --workspace       # Run all tests
+cargo nextest run --workspace  # Run all tests (preferred)
 cargo fmt --all --check      # Check formatting
 cargo clippy --workspace     # Run lints
 ```

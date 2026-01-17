@@ -60,3 +60,4 @@ lsp-types = "0.97.0"
 
 # Nextest for test result parsing
 nextest-metadata = "0.13.0"
+cargo-nextest = "0.9"

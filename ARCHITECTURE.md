@@ -159,7 +159,7 @@ cargo build --workspace
 ### Testing
 
 ```bash
-cargo test --workspace
+cargo nextest run --workspace
 ```
 
 ### Benchmarks

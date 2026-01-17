@@ -60,11 +60,11 @@ cargo build -p <crate-name>
 cargo check --workspace
 cargo check -p <crate-name>
 
-# Test commands
-cargo test --workspace
-cargo test -p <crate-name>
-cargo test <test_name>
-cargo test --workspace -- --nocapture  # Show println! output
+# Test commands (using cargo-nextest for better output)
+cargo nextest run --workspace
+cargo nextest run -p <crate-name>
+cargo nextest run <test_name>
+cargo nextest run --workspace --no-capture  # Show println! output
 
 # Linting and formatting
 cargo fmt --check --all
@@ -138,7 +138,7 @@ Structure execution results as:
 ```markdown
 ## Execution Summary
 
-**Command**: `cargo test --workspace`
+**Command**: `cargo nextest run --workspace`
 **Status**: ✅ Success / ❌ Failed
 **Duration**: X.XX seconds
 

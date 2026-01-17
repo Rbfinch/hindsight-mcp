@@ -78,7 +78,7 @@ This reference provides a complete example milestone for complex projects.
 #### Validation Gate
 
 ```bash
-cargo test -p hindsight-mcp -- db
+cargo nextest run -p hindsight-mcp -- db
 ./scripts/benchmark_db.sh --save
 ```
 
@@ -130,7 +130,7 @@ cargo test -p hindsight-mcp -- db
 #### Validation Gate
 
 ```bash
-cargo test -p hindsight-mcp -- db
+cargo nextest run -p hindsight-mcp -- db
 cargo build --features sqlite
 ```
 
