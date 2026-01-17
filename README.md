@@ -8,7 +8,7 @@ hindsight-mcp consolidates various "development data" stored locally (git logs, 
 
 ## Quick Start
 
-### Installation
+### 1. Build
 
 ```bash
 # Clone and build
@@ -19,9 +19,9 @@ cargo build --release
 # The binary is at ./target/release/hindsight-mcp
 ```
 
-### VS Code Configuration
+### 2. Configure VS Code
 
-Add to your VS Code settings or `.vscode/mcp.json`:
+Add to `.vscode/mcp.json` in your project:
 
 ```json
 {
@@ -34,6 +34,34 @@ Add to your VS Code settings or `.vscode/mcp.json`:
   }
 }
 ```
+
+### 3. First Run
+
+On first use, ingest your development history:
+
+```bash
+# Option A: Run the server directly (it auto-creates the database)
+./target/release/hindsight-mcp -w /path/to/your/project
+```
+
+Then ask Copilot to use the `hindsight_ingest` tool, or ingest happens automatically on first query.
+
+**That's it!** You can now ask Copilot questions like:
+- "What have I been working on recently?" → uses `hindsight_timeline`
+- "Find commits about authentication" → uses `hindsight_search`
+- "What tests are failing?" → uses `hindsight_failing_tests`
+- "Summarise my activity this week" → uses `hindsight_activity_summary`
+
+### Available Tools
+
+| Tool | Purpose |
+|------|---------|
+| `hindsight_timeline` | Chronological view of commits, tests, Copilot sessions |
+| `hindsight_search` | Full-text search across commits and messages |
+| `hindsight_failing_tests` | Currently failing tests from recent runs |
+| `hindsight_activity_summary` | Aggregate stats for a time period |
+| `hindsight_commit_details` | Detailed commit info with linked test runs |
+| `hindsight_ingest` | Trigger data ingestion from git/copilot |
 
 ### Claude Desktop Configuration
 
