@@ -116,28 +116,29 @@ cargo clippy -p hindsight-git       # ✅ No warnings
 
 ### Phase 1: Nextest Output Parsing (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-17
 **Goal**: Implement `hindsight-tests::nextest` to parse cargo-nextest JSON output
 **Dependencies**: None (can run in parallel with Phase 0)
 
 #### Tasks
 
-1. **JSON stream parsing** (~80 lines)
+1. **JSON stream parsing** (~80 lines) ✅
    - Parse nextest `--message-format json` output
    - Handle test-start, test-finish events
    - Extract test list from `nextest list --message-format json`
 
-2. **Test result extraction** (~100 lines)
+2. **Test result extraction** (~100 lines) ✅
    - Map nextest events to `TestResult` struct
    - Extract suite name, test name, outcome
    - Capture duration, stdout, stderr
 
-3. **Test run aggregation** (~60 lines)
+3. **Test run aggregation** (~60 lines) ✅
    - Group results by test run
    - Calculate pass/fail/ignored counts
    - Extract build metadata
 
-4. **Unit tests** (~80 lines)
+4. **Unit tests** (~80 lines) ✅
    - Test JSON parsing
    - Test result extraction
    - Test aggregation logic
@@ -145,22 +146,22 @@ cargo clippy -p hindsight-git       # ✅ No warnings
 
 #### Deliverables
 
-- `crates/hindsight-tests/src/nextest.rs` - Full implementation (~250 lines)
-- `crates/hindsight-tests/tests/fixtures/` - Additional test fixtures
+- `crates/hindsight-tests/src/nextest.rs` - Full implementation (~350 lines) ✅
+- `crates/hindsight-tests/src/lib.rs` - Extended with exports ✅
 
 #### Validation Gate
 
 ```bash
-cargo nextest run -p hindsight-tests
-cargo clippy -p hindsight-tests
+cargo nextest run -p hindsight-tests  # ✅ 37 tests pass
+cargo clippy -p hindsight-tests       # ✅ No warnings
 ```
 
 #### Success Criteria
 
-- [ ] Can parse nextest JSON stream
-- [ ] Can extract all test result fields
-- [ ] Can aggregate into test runs
-- [ ] ≥6 unit tests pass
+- [x] Can parse nextest JSON stream
+- [x] Can extract all test result fields
+- [x] Can aggregate into test runs
+- [x] ≥6 unit tests pass (10 new tests)
 
 **Commit**: `feat(tests): implement nextest output parsing`
 
