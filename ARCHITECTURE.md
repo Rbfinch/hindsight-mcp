@@ -637,3 +637,184 @@ cargo +nightly fuzz run <target-name>
 2. **Separate library crates**: Each data source (git, tests, copilot) is isolated for maintainability and testing
 3. **SQLite storage**: Provides durable, queryable storage with good performance for local use
 4. **MCP protocol**: Standard protocol for LLM tool integration, works seamlessly with VS Code
+
+---
+
+## MCP Server Architecture
+
+The MCP server is implemented using `rust-mcp-sdk` with stdio transport for seamless integration with VS Code and Claude Desktop.
+
+### Server Components
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                       hindsight-mcp Binary                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐  │
+│  │  config.rs  │  │  main.rs    │  │  server.rs  │  │ handlers.rs│  │
+│  │             │  │             │  │             │  │            │  │
+│  │ - CLI args  │  │ - Startup   │  │ - MCP impl  │  │ - Tool     │  │
+│  │ - Validation│──│ - DB init   │──│ - Routing   │──│   handlers │  │
+│  │ - Logging   │  │ - Logging   │  │ - Responses │  │ - Queries  │  │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └────────────┘  │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Module Responsibilities
+
+| Module | Purpose | Lines |
+|--------|---------|-------|
+| `config.rs` | CLI parsing, validation, logging configuration | ~235 |
+| `main.rs` | Server startup, database lifecycle, transport | ~230 |
+| `server.rs` | MCP protocol implementation, request routing | ~450 |
+| `handlers.rs` | Tool handlers bridging MCP to database queries | ~520 |
+
+### MCP Protocol Implementation
+
+The server implements the Model Context Protocol using JSON-RPC over stdio:
+
+```
+┌──────────────────┐         ┌──────────────────┐
+│   MCP Client     │         │  hindsight-mcp   │
+│ (VS Code/Claude) │         │     Server       │
+└────────┬─────────┘         └────────┬─────────┘
+         │                            │
+         │ ─── initialize ──────────► │
+         │ ◄── capabilities ───────── │
+         │                            │
+         │ ─── tools/list ──────────► │
+         │ ◄── [6 tool schemas] ───── │
+         │                            │
+         │ ─── tools/call ──────────► │
+         │     {hindsight_timeline}   │
+         │                            │
+         │     ┌──────────────────────┤
+         │     │ 1. Parse arguments   │
+         │     │ 2. Execute query     │
+         │     │ 3. Format JSON       │
+         │     └──────────────────────┤
+         │                            │
+         │ ◄── content result ─────── │
+         │                            │
+```
+
+### Tool Registry
+
+| Tool Name | Handler | Database Query |
+|-----------|---------|----------------|
+| `hindsight_timeline` | `handle_timeline()` | `queries::get_timeline()` |
+| `hindsight_search` | `handle_search()` | `queries::search_all()` |
+| `hindsight_failing_tests` | `handle_failing_tests()` | `queries::get_failing_tests()` |
+| `hindsight_activity_summary` | `handle_activity_summary()` | `queries::get_activity_summary()` |
+| `hindsight_commit_details` | `handle_commit_details()` | `queries::get_commit_with_tests()` |
+| `hindsight_ingest` | `handle_ingest()` | `Ingestor::ingest_*()` |
+
+### Configuration Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Configuration Sources                         │
+├─────────────────┬─────────────────┬─────────────────────────────────┤
+│   CLI Arguments │   Environment   │   Platform Defaults             │
+│   --database    │ HINDSIGHT_DB    │ ~/Library/.../hindsight.db      │
+│   --workspace   │ HINDSIGHT_WS    │ current directory               │
+│   --verbose     │                 │                                  │
+│   --quiet       │                 │                                  │
+└────────┬────────┴────────┬────────┴─────────────────────────────────┘
+         │                 │
+         └────────┬────────┘
+                  ▼
+         ┌───────────────┐
+         │   Config      │
+         │   Validation  │
+         │               │
+         │ - workspace   │
+         │   exists?     │
+         │ - db dir      │
+         │   writable?   │
+         └───────┬───────┘
+                 │
+                 ▼
+         ┌───────────────┐
+         │   Database    │
+         │   Lifecycle   │
+         │               │
+         │ - open/create │
+         │ - migrations  │
+         │ - ready       │
+         └───────┬───────┘
+                 │
+                 ▼
+         ┌───────────────┐
+         │  MCP Server   │
+         │    Start      │
+         └───────────────┘
+```
+
+### Logging Levels
+
+| Flag | Level | Output |
+|------|-------|--------|
+| (default) | INFO | Server events, database ready |
+| `--verbose` | DEBUG | Request/response details, queries |
+| `--quiet` | WARN | Errors and warnings only |
+
+All logs are written to stderr to avoid interfering with MCP stdio transport.
+
+### Thread Safety
+
+The `HindsightServer` wraps the database in `Arc<Mutex<Database>>` for safe async access:
+
+```rust
+pub struct HindsightServer {
+    db: Arc<Mutex<Database>>,
+    db_path: Option<PathBuf>,
+    workspace: Option<PathBuf>,
+}
+```
+
+For ingestion operations that require database ownership, the server opens a new connection using `db_path` since SQLite handles concurrent access via file locking.
+
+### Client Integration
+
+#### VS Code (`.vscode/mcp.json`)
+
+```json
+{
+  "servers": {
+    "hindsight": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/target/release/hindsight-mcp",
+      "args": ["--workspace", "${workspaceFolder}"]
+    }
+  }
+}
+```
+
+#### Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "hindsight": {
+      "command": "/path/to/hindsight-mcp",
+      "args": ["--workspace", "/path/to/project"]
+    }
+  }
+}
+```
+
+### Error Handling
+
+Errors are returned as MCP content rather than protocol errors, allowing LLMs to see and handle issues:
+
+```rust
+match result {
+    Ok(value) => CallToolResult::text_content(vec![...]),
+    Err(e) => CallToolResult::text_content(vec![
+        TextContent::new(format!("Error: {}", e), None, None)
+    ]),
+}
+```
