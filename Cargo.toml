@@ -22,12 +22,16 @@ hindsight-copilot = { path = "crates/hindsight-copilot" }
 
 # Error handling
 thiserror = "2.0.17"
+anyhow = "1.0"
 
 # Testing & benchmarking
 criterion = "0.8.1"
 proptest = "1.9.0"
 similar = "2.7.0"
 similar-asserts = "1.7.0"
+
+# CLI parsing
+clap = { version = "4.5", features = ["derive", "env"] }
 
 # Date/time
 chrono = { version = "0.4.39", features = ["serde"] }
@@ -43,10 +47,14 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.135"
 
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+
 # MCP SDK
-rust-mcp-sdk = { version = "0.2", default-features = false, features = [
+rust-mcp-sdk = { version = "0.8", default-features = false, features = [
     "server",
-    "hyper-server",
+    "stdio",
 ] }
 
 # SQLite

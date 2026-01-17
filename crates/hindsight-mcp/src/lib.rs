@@ -8,3 +8,4 @@ mod migrations;
 pub mod db;
 pub mod ingest;
 pub mod queries;
+pub mod server;
