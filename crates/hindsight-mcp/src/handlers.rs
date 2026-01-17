@@ -23,24 +23,28 @@ use crate::queries::{
 #[derive(Debug, Error)]
 pub enum HandlerError {
     /// Query error
-    #[error("Query error: {0}")]
+    #[error("Database query failed: {0}. Try running 'hindsight_ingest' to populate the database.")]
     Query(#[from] QueryError),
 
     /// Ingestion error
-    #[error("Ingestion error: {0}")]
+    #[error("Data ingestion failed: {0}")]
     Ingest(#[from] IngestError),
 
-    /// JSON parsing error
-    #[error("Invalid input: {0}")]
+    /// Invalid input - missing required field
+    #[error("Invalid input: {0}. Check the tool's required parameters.")]
     InvalidInput(String),
 
     /// JSON serialization error
-    #[error("JSON error: {0}")]
+    #[error("Failed to process JSON: {0}")]
     Json(#[from] serde_json::Error),
 
     /// Resource not found
-    #[error("Not found: {0}")]
+    #[error("{0}. Use 'hindsight_search' to find available commits.")]
     NotFound(String),
+
+    /// Workspace not found
+    #[error("Workspace not found: {0}. Ensure the path exists and is accessible.")]
+    WorkspaceNotFound(String),
 }
 
 // ============================================================================
@@ -225,7 +229,8 @@ pub fn handle_search(
 
     if input.query.is_empty() {
         return Err(HandlerError::InvalidInput(
-            "Query cannot be empty".to_string(),
+            "Search query cannot be empty. Provide a search term like 'refactor' or 'fix bug'."
+                .to_string(),
         ));
     }
 
@@ -284,7 +289,7 @@ pub fn handle_commit_details(
 
     if input.sha.is_empty() {
         return Err(HandlerError::InvalidInput(
-            "SHA cannot be empty".to_string(),
+            "Commit SHA is required. Provide a full or partial SHA like 'abc123' or 'abc123def456789'.".to_string(),
         ));
     }
 
@@ -305,8 +310,12 @@ pub fn handle_ingest(
     let workspace_path = PathBuf::from(&input.workspace);
 
     if !workspace_path.exists() {
+        return Err(HandlerError::WorkspaceNotFound(input.workspace.clone()));
+    }
+
+    if !workspace_path.is_dir() {
         return Err(HandlerError::InvalidInput(format!(
-            "Workspace path does not exist: {}",
+            "Workspace path is not a directory: {}",
             input.workspace
         )));
     }

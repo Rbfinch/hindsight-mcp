@@ -72,3 +72,35 @@ cargo-nextest = "0.9"
 
 # UUID generation
 uuid = { version = "1.0", features = ["v4"] }
+
+# ============================================================================
+# Release Profile - Optimized for binary size and performance
+# ============================================================================
+[profile.release]
+# Enable link-time optimization for better performance
+lto = "thin"
+# Single codegen unit for better optimization
+codegen-units = 1
+# Strip debug symbols for smaller binary
+strip = "symbols"
+# Optimize for speed
+opt-level = 3
+# Enable panic=abort for smaller binary (no unwinding)
+panic = "abort"
+
+# ============================================================================
+# Development Profile - Fast compilation, some optimizations
+# ============================================================================
+[profile.dev]
+# Enable basic optimizations for faster tests
+opt-level = 1
+
+[profile.dev.package."*"]
+# Optimize dependencies in dev mode
+opt-level = 2
+
+# ============================================================================
+# Benchmark Profile - Inherits from release with debug symbols
+# ============================================================================
+[profile.bench]
+debug = true
