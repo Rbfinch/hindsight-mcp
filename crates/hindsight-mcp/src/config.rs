@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 /// Hindsight MCP Server - AI-assisted coding with development history
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone, Default)]
 #[command(name = "hindsight-mcp")]
 #[command(version, about, long_about = None)]
 pub struct Config {
@@ -139,19 +139,6 @@ impl Config {
             tracing::Level::WARN
         } else {
             tracing::Level::INFO
-        }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            command: None,
-            database: None,
-            workspace: None,
-            verbose: false,
-            quiet: false,
-            skip_init: false,
         }
     }
 }

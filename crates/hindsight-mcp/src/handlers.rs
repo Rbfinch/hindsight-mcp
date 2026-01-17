@@ -237,7 +237,7 @@ pub fn handle_search(
     let results = match input.source.as_str() {
         "commits" => queries::search_commits(db.connection(), &input.query, input.limit)?,
         "messages" => queries::search_messages(db.connection(), &input.query, input.limit)?,
-        "all" | _ => queries::search_all(db.connection(), &input.query, input.limit)?,
+        _ => queries::search_all(db.connection(), &input.query, input.limit)?,
     };
 
     Ok(results)
@@ -346,8 +346,8 @@ pub fn handle_ingest(
             let stats = ingestor.ingest_copilot(&workspace_path)?;
             total_stats.merge(&stats);
         }
-        "all" | _ => {
-            // Ingest all sources, collecting stats
+        _ => {
+            // Ingest all sources (default), collecting stats
             // Note: test ingestion requires nextest output, which we don't have here
             // So we only ingest git and copilot in "all" mode
             if let Ok(stats) = ingestor.ingest_git(&workspace_path, &options) {
