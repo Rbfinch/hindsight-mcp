@@ -30,6 +30,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
 dirs.workspace = true
+git2.workspace = true
 rust-mcp-sdk.workspace = true
 rusqlite.workspace = true
 thiserror.workspace = true

@@ -1511,3 +1511,136 @@ fn test_subcommand_nextest_check() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Dry-run mode"));
 }
+
+/// Test that the test subcommand auto-detects git commit
+#[test]
+fn test_subcommand_commit_auto_detection() {
+    use std::process::Command;
+
+    // First check if nextest is installed
+    let nextest_check = Command::new("cargo")
+        .args(["nextest", "--version"])
+        .output();
+
+    let nextest_installed = nextest_check.map(|o| o.status.success()).unwrap_or(false);
+
+    if !nextest_installed {
+        eprintln!("Skipping test: cargo-nextest not installed");
+        return;
+    }
+
+    // Run in the workspace directory (which is a git repo)
+    let output = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args(["test", "--dry-run", "-p", "hindsight-tests"])
+        .current_dir(env!("CARGO_MANIFEST_DIR").replace("/crates/hindsight-mcp", ""))
+        .output()
+        .expect("Failed to execute hindsight-mcp");
+
+    assert!(
+        output.status.success(),
+        "Command failed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should show auto-detected commit (40 hex chars)
+    // The output format is "  Commit:  <sha>"
+    assert!(
+        stdout.contains("Commit:"),
+        "Expected commit info in dry-run output"
+    );
+
+    // Verify it's not "(none)" - meaning a commit was detected
+    assert!(
+        !stdout.contains("Commit:  (none)"),
+        "Expected auto-detected commit SHA, not (none)"
+    );
+}
+
+/// Test that --no-commit disables commit linking
+#[test]
+fn test_subcommand_no_commit_flag() {
+    use std::process::Command;
+
+    // First check if nextest is installed
+    let nextest_check = Command::new("cargo")
+        .args(["nextest", "--version"])
+        .output();
+
+    let nextest_installed = nextest_check.map(|o| o.status.success()).unwrap_or(false);
+
+    if !nextest_installed {
+        eprintln!("Skipping test: cargo-nextest not installed");
+        return;
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args(["test", "--dry-run", "--no-commit", "-p", "hindsight-tests"])
+        .current_dir(env!("CARGO_MANIFEST_DIR").replace("/crates/hindsight-mcp", ""))
+        .output()
+        .expect("Failed to execute hindsight-mcp");
+
+    assert!(
+        output.status.success(),
+        "Command failed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should show "(none)" for commit
+    assert!(
+        stdout.contains("Commit:  (none)"),
+        "Expected (none) when --no-commit is used, got: {}",
+        stdout
+    );
+}
+
+/// Test that --commit overrides auto-detection
+#[test]
+fn test_subcommand_explicit_commit_flag() {
+    use std::process::Command;
+
+    // First check if nextest is installed
+    let nextest_check = Command::new("cargo")
+        .args(["nextest", "--version"])
+        .output();
+
+    let nextest_installed = nextest_check.map(|o| o.status.success()).unwrap_or(false);
+
+    if !nextest_installed {
+        eprintln!("Skipping test: cargo-nextest not installed");
+        return;
+    }
+
+    let explicit_sha = "abc123def456789012345678901234567890abcd";
+
+    let output = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args([
+            "test",
+            "--dry-run",
+            "--commit",
+            explicit_sha,
+            "-p",
+            "hindsight-tests",
+        ])
+        .current_dir(env!("CARGO_MANIFEST_DIR").replace("/crates/hindsight-mcp", ""))
+        .output()
+        .expect("Failed to execute hindsight-mcp");
+
+    assert!(
+        output.status.success(),
+        "Command failed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should show the explicit commit SHA
+    assert!(
+        stdout.contains(explicit_sha),
+        "Expected explicit SHA in output, got: {}",
+        stdout
+    );
+}

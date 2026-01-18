@@ -722,6 +722,7 @@ dependencies = [
  "clap",
  "criterion",
  "dirs",
+ "git2",
  "hindsight-copilot",
  "hindsight-git",
  "hindsight-tests",

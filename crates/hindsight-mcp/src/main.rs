@@ -340,6 +340,48 @@ fn run_nextest(
     })
 }
 
+/// Get the current git HEAD commit SHA
+///
+/// # Arguments
+/// * `workspace` - Path to the workspace/project directory
+///
+/// # Returns
+/// * `Some(sha)` - The full 40-character SHA of HEAD
+/// * `None` - If not in a git repository or HEAD is unborn
+fn get_current_commit(workspace: &Path) -> Option<String> {
+    // Try to open the repository
+    let repo = match git2::Repository::discover(workspace) {
+        Ok(repo) => repo,
+        Err(e) => {
+            debug!(error = %e, "Not a git repository or git error");
+            return None;
+        }
+    };
+
+    // Get HEAD reference
+    let head = match repo.head() {
+        Ok(head) => head,
+        Err(e) => {
+            // Unborn HEAD (new repo with no commits) is not an error for us
+            debug!(error = %e, "Could not resolve HEAD");
+            return None;
+        }
+    };
+
+    // Resolve to commit SHA
+    match head.peel_to_commit() {
+        Ok(commit) => {
+            let sha = commit.id().to_string();
+            debug!(commit = %sha, "Detected git HEAD commit");
+            Some(sha)
+        }
+        Err(e) => {
+            debug!(error = %e, "Could not peel HEAD to commit");
+            None
+        }
+    }
+}
+
 /// Run tests and ingest results
 ///
 /// This command wraps cargo-nextest, runs tests, and ingests results.
@@ -438,9 +480,17 @@ async fn run_test(
         debug!(commit = %sha, "Using explicit commit SHA");
         Some(sha.clone())
     } else {
-        // TODO: Phase 2 - Auto-detect from git HEAD
-        debug!("Commit auto-detection not yet implemented");
-        None
+        // Auto-detect from git HEAD
+        match get_current_commit(&workspace) {
+            Some(sha) => {
+                info!(commit = %sha, "Auto-detected git commit");
+                Some(sha)
+            }
+            None => {
+                debug!("Not in a git repository or no commits - proceeding without commit link");
+                None
+            }
+        }
     };
 
     // Parse and display results
@@ -608,5 +658,49 @@ mod tests {
         assert_eq!(details.server_info.name, "hindsight-mcp");
         assert!(details.capabilities.tools.is_some());
         assert!(details.instructions.is_some());
+    }
+
+    #[test]
+    fn test_get_current_commit_in_git_repo() {
+        // This test runs from within the hindsight-mcp repo
+        let repo_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+
+        // Should detect a commit SHA since we're in a git repo
+        let commit = get_current_commit(&repo_path);
+        assert!(commit.is_some(), "Expected to detect git commit in repo");
+
+        // SHA should be 40 hex characters
+        let sha = commit.unwrap();
+        assert_eq!(sha.len(), 40, "SHA should be 40 characters");
+        assert!(
+            sha.chars().all(|c| c.is_ascii_hexdigit()),
+            "SHA should be hex"
+        );
+    }
+
+    #[test]
+    fn test_get_current_commit_non_git_directory() {
+        // /tmp is unlikely to be a git repository
+        let non_git_path = PathBuf::from("/tmp");
+
+        let commit = get_current_commit(&non_git_path);
+        assert!(
+            commit.is_none(),
+            "Expected None for non-git directory, got {:?}",
+            commit
+        );
+    }
+
+    #[test]
+    fn test_get_current_commit_nonexistent_directory() {
+        let nonexistent = PathBuf::from("/nonexistent/path/12345");
+
+        let commit = get_current_commit(&nonexistent);
+        assert!(commit.is_none(), "Expected None for nonexistent path");
     }
 }
