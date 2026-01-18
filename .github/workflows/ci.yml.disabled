@@ -130,6 +130,7 @@ jobs:
         uses: taiki-e/install-action@nextest
 
       - name: Run tests with nextest
+        # Exclude dummy_failing_tests which are intentionally failing tests for testing hindsight's failure parsing
         run: cargo nextest run --workspace -E 'not binary(dummy_failing_tests)'
 
       - name: Run doc tests
