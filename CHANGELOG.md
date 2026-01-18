@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.2] - 2026-01-18
+
+### Changed
+
+- **Documentation**
+  - Added Prerequisites section specifying VS Code v1.99+ requirement
+  - Added instructions for starting the server and listing running MCP servers
+  - Added instructions for enabling hindsight tools in Copilot Chat Agent mode
+
+## [0.1.1] - 2026-01-18
 
 ### Changed
 

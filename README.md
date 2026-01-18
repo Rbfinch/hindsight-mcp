@@ -8,6 +8,10 @@ An MCP server for AI-assisted coding that leverages development history.
 
 ## Quick Start
 
+### Prerequisites
+
+- **VS Code v1.99+** — MCP server support requires a recent version of VS Code
+
 ### Installation
 
 **Option A: Install from crates.io** (recommended)
@@ -41,6 +45,23 @@ Add to `.vscode/mcp.json` in your project:
 ```
 
 > **Note:** If installed via `cargo install`, `hindsight-mcp` will be in your PATH. Otherwise, use the full path to the binary.
+
+### Starting the Server
+
+The hindsight-mcp server starts automatically when VS Code loads your project with the `.vscode/mcp.json` configuration. You can verify it's running:
+
+1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+2. Type **"MCP: List Servers"** and select it
+3. You should see `hindsight` listed with a running status
+
+### Enabling Hindsight Tools in Copilot Chat
+
+To access hindsight tools, you need to use Agent mode in Copilot Chat:
+
+1. In the Copilot Chat window, look for the dropdown menu at the top (it might say "Ask" or "Chat")
+2. Change it to **Agent** or **Edit**
+3. The tools icon should now appear in the bottom-left or bottom-right corner of the chat input box
+4. Click the tools icon to verify hindsight tools are available
 
 ### First Run
 
@@ -419,13 +440,11 @@ Returns:
 
 ```json
 {
-  "period_days": 7,
+  "days": 7,
   "commits": 23,
   "test_runs": 45,
-  "tests_passed": 1250,
-  "tests_failed": 12,
   "copilot_sessions": 8,
-  "copilot_messages": 67
+  "failing_tests": 12
 }
 ```
 

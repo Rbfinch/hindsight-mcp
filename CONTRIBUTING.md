@@ -8,7 +8,7 @@ However, I greatly value your input and encourage you to contribute in the follo
 
 ## Bug Reports
 
-If you encounter a bug or unexpected behavior, or bogus or incomplete documentation, please submit a detailed report via a GitHub issue. To help me quickly address the issue, please include the following information:
+If you encounter a bug or unexpected behavior, or incorrect or incomplete documentation, please submit a detailed report via a GitHub issue. To help me quickly address the issue, please include the following information:
 
 * **A clear and descriptive title.**
 * **Steps to reproduce the bug.**
