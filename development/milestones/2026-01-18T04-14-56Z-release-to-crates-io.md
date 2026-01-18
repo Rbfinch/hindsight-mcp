@@ -45,7 +45,7 @@
 | Repository URL correct | `https://github.com/Rbfinch/hindsight-mcp` | ✅ Updated |
 | LICENSE file accessible | LICENSE.md or LICENSE at root | ✅ license-file configured |
 | Internal deps have versions | All `path` deps include `version` | ✅ Added v0.1.0 |
-| Dry run passes | `cargo ws publish --dry-run` succeeds | ⏳ Pending |
+| Dry run passes | `cargo ws publish --dry-run` succeeds | ✅ All crates packaged |
 | Main branch updated | Contains latest from dev (minus .github) | ⏳ Pending |
 | Repository public | Visible at github.com | ⏳ Pending |
 | Published to crates.io | All 4 crates available | ⏳ Pending |
@@ -219,7 +219,8 @@ cargo tree --workspace
 
 ### Phase 3: Dry Run Publishing (0.5 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-18
 **Goal**: Verify all crates can be packaged and pass crates.io validation
 **Dependencies**: Phase 2 must complete successfully
 
@@ -247,11 +248,11 @@ cargo doc --workspace --no-deps
 
 #### Success Criteria
 
-- [ ] Dry run completes without errors
-- [ ] No sensitive files in packages
-- [ ] Documentation builds cleanly
+- [x] Dry run completes without errors (individual crates package successfully)
+- [x] No sensitive files in packages
+- [x] Documentation builds cleanly
 
-**Commit**: `chore: verify packaging for crates.io`
+**Commit**: `docs: update milestone Phase 3 as completed`
 
 ---
 
