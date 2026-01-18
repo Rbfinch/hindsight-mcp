@@ -15,6 +15,8 @@
 //! The server communicates over stdio using the MCP (Model Context Protocol).
 
 use std::io::{self, BufRead};
+use std::path::Path;
+use std::process::{Command as ProcessCommand, Stdio};
 
 use clap::Parser;
 use rust_mcp_sdk::mcp_server::{McpServerOptions, ToMcpServerHandler, server_runtime};
@@ -220,7 +222,125 @@ async fn run_ingest(config: &Config, tests: bool, commit: Option<String>) -> any
     Ok(())
 }
 
-/// Run tests and ingest results (stub implementation)
+/// Check if cargo-nextest is installed
+///
+/// Returns Ok(()) if nextest is available, or an error with install instructions.
+fn check_nextest_installed() -> anyhow::Result<()> {
+    let output = ProcessCommand::new("cargo")
+        .args(["nextest", "--version"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
+    match output {
+        Ok(status) if status.success() => Ok(()),
+        _ => Err(anyhow::anyhow!(
+            "cargo-nextest is not installed.\n\n\
+                 Install it with:\n  \
+                 cargo install cargo-nextest\n\n\
+                 Or see: https://nexte.st/book/installation.html"
+        )),
+    }
+}
+
+/// Result of running nextest
+#[derive(Debug)]
+struct NextestResult {
+    /// JSON output from nextest (stdout)
+    json_output: String,
+    /// Whether all tests passed
+    success: bool,
+}
+
+/// Run cargo nextest and capture JSON output
+///
+/// # Arguments
+/// * `workspace` - Path to the workspace/project directory
+/// * `package` - Package(s) to test
+/// * `bin` - Binary(ies) to test
+/// * `filter` - Filter expression for tests
+/// * `show_output` - Whether to stream stderr to terminal
+/// * `nextest_args` - Additional arguments to pass to nextest
+///
+/// # Returns
+/// The captured JSON output from nextest
+fn run_nextest(
+    workspace: &Path,
+    package: &[String],
+    bin: &[String],
+    filter: Option<&str>,
+    show_output: bool,
+    nextest_args: &[String],
+) -> anyhow::Result<NextestResult> {
+    let mut cmd = ProcessCommand::new("cargo");
+
+    // Base command
+    cmd.arg("nextest")
+        .arg("run")
+        .arg("--message-format")
+        .arg("libtest-json");
+
+    // Set required environment variable for JSON output
+    cmd.env("NEXTEST_EXPERIMENTAL_LIBTEST_JSON", "1");
+
+    // Add package filters
+    for pkg in package {
+        cmd.arg("--package").arg(pkg);
+    }
+
+    // Add binary filters
+    for b in bin {
+        cmd.arg("--bin").arg(b);
+    }
+
+    // Add filter expression
+    if let Some(f) = filter {
+        cmd.arg("-E").arg(f);
+    }
+
+    // Add passthrough args
+    for arg in nextest_args {
+        cmd.arg(arg);
+    }
+
+    // Set working directory
+    cmd.current_dir(workspace);
+
+    // Configure output handling
+    cmd.stdout(Stdio::piped());
+
+    if show_output {
+        // Stream stderr to terminal
+        cmd.stderr(Stdio::inherit());
+    } else {
+        // Suppress stderr
+        cmd.stderr(Stdio::null());
+    }
+
+    debug!(command = ?cmd, "Spawning nextest");
+
+    let output = cmd.output().map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to spawn cargo nextest: {}\n\n\
+             Make sure cargo-nextest is installed:\n  \
+             cargo install cargo-nextest",
+            e
+        )
+    })?;
+
+    let json_output = String::from_utf8_lossy(&output.stdout).to_string();
+
+    if json_output.trim().is_empty() {
+        warn!("No JSON output received from nextest - tests may have failed to run");
+    }
+
+    Ok(NextestResult {
+        json_output,
+        success: output.status.success(),
+    })
+}
+
+/// Run tests and ingest results
 ///
 /// This command wraps cargo-nextest, runs tests, and ingests results.
 #[allow(clippy::too_many_arguments)]
@@ -261,24 +381,100 @@ async fn run_test(
         "Test command options"
     );
 
-    // TODO: Phase 1 - Implement nextest spawning
-    // TODO: Phase 2 - Implement git commit auto-detection
-    // TODO: Phase 3 - Implement full ingestion integration
+    // Get workspace path
+    let workspace = config.workspace_path().ok_or_else(|| {
+        anyhow::anyhow!("Workspace path is required. Use --workspace or set HINDSIGHT_WORKSPACE")
+    })?;
 
-    eprintln!("Error: The 'test' subcommand is not yet fully implemented.");
-    eprintln!();
-    eprintln!("Coming soon:");
-    eprintln!("  - Run cargo-nextest and capture JSON output");
-    eprintln!("  - Auto-detect git commit from HEAD");
-    eprintln!("  - Ingest test results to database");
-    eprintln!();
-    eprintln!("For now, use the existing workflow:");
-    eprintln!(
-        "  NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json | \\"
-    );
-    eprintln!("    hindsight-mcp ingest --tests");
+    // Get JSON output - either from stdin or by running nextest
+    let json_output = if stdin {
+        // Read from stdin (CI mode)
+        info!("Reading test results from stdin");
+        let stdin_handle = io::stdin();
+        let mut input = String::new();
+        for line in stdin_handle.lock().lines() {
+            let line = line?;
+            input.push_str(&line);
+            input.push('\n');
+        }
 
-    std::process::exit(1);
+        if input.trim().is_empty() {
+            return Err(anyhow::anyhow!(
+                "No input received from stdin.\n\n\
+                 Pipe nextest JSON output:\n  \
+                 NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run \
+                 --message-format libtest-json | hindsight-mcp test --stdin"
+            ));
+        }
+
+        input
+    } else {
+        // Check nextest is installed
+        check_nextest_installed()?;
+
+        // Run nextest
+        info!(workspace = %workspace.display(), "Running tests");
+        let result = run_nextest(
+            &workspace,
+            &package,
+            &bin,
+            filter.as_deref(),
+            show_output,
+            &nextest_args,
+        )?;
+
+        if !result.success {
+            warn!("Some tests failed");
+        }
+
+        result.json_output
+    };
+
+    // Determine commit SHA
+    let commit_sha = if no_commit {
+        debug!("Commit linking disabled (--no-commit)");
+        None
+    } else if let Some(ref sha) = commit {
+        debug!(commit = %sha, "Using explicit commit SHA");
+        Some(sha.clone())
+    } else {
+        // TODO: Phase 2 - Auto-detect from git HEAD
+        debug!("Commit auto-detection not yet implemented");
+        None
+    };
+
+    // Parse and display results
+    let summary = hindsight_tests::parse_run_output(&json_output)?;
+
+    if dry_run {
+        // Dry-run mode: display what would be ingested
+        println!("Dry-run mode - no data will be written to database\n");
+        println!("Test Summary:");
+        println!("  Total:   {}", summary.results.len());
+        println!("  Passed:  {}", summary.passed);
+        println!("  Failed:  {}", summary.failed);
+        println!("  Ignored: {}", summary.ignored);
+        if let Some(ref sha) = commit_sha {
+            println!("  Commit:  {}", sha);
+        } else {
+            println!("  Commit:  (none)");
+        }
+        println!("\nWorkspace: {}", workspace.display());
+        return Ok(());
+    }
+
+    // TODO: Phase 3 - Ingest to database
+    // For now, just print summary
+    println!("Test run completed:");
+    println!("  Total:   {}", summary.results.len());
+    println!("  Passed:  {}", summary.passed);
+    println!("  Failed:  {}", summary.failed);
+    println!("  Ignored: {}", summary.ignored);
+    println!();
+    eprintln!("Note: Database ingestion not yet implemented (Phase 3)");
+    eprintln!("      Results were captured but not persisted.");
+
+    Ok(())
 }
 
 /// Run the MCP server

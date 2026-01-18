@@ -1379,3 +1379,135 @@ fn test_server_creation_with_db_path() {
     // Server should be created successfully with db_path set
     // (We can't easily test the internal state, but it shouldn't panic)
 }
+
+// ============================================================================
+// Test subcommand CLI integration tests
+// ============================================================================
+
+/// Test that the test subcommand binary can be invoked with --help
+#[test]
+fn test_subcommand_help() {
+    use std::process::Command;
+
+    let output = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args(["test", "--help"])
+        .output()
+        .expect("Failed to execute hindsight-mcp");
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Run tests and ingest results"));
+    assert!(stdout.contains("--package"));
+    assert!(stdout.contains("--dry-run"));
+    assert!(stdout.contains("--stdin"));
+    assert!(stdout.contains("--show-output"));
+    assert!(stdout.contains("cargo-nextest"));
+}
+
+/// Test that the test subcommand shows proper error when stdin is empty
+#[test]
+fn test_subcommand_stdin_empty_error() {
+    use std::process::{Command, Stdio};
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args(["test", "--stdin", "--dry-run"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn hindsight-mcp");
+
+    // Close stdin immediately (empty input)
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output().expect("Failed to wait on child");
+
+    // Should fail because stdin is empty
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("stdin") || stderr.contains("input"));
+}
+
+/// Test that the test subcommand can parse stdin JSON in dry-run mode
+#[test]
+fn test_subcommand_stdin_dry_run() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    // Sample nextest JSON output (minimal valid format)
+    let nextest_json = r#"{ "type": "suite", "event": "started", "test_count": 1 }
+{ "type": "test", "event": "started", "name": "test_example" }
+{ "type": "test", "name": "test_example", "event": "ok", "exec_time": 0.001 }
+{ "type": "suite", "event": "ok", "passed": 1, "failed": 0, "ignored": 0 }
+"#;
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args(["test", "--stdin", "--dry-run"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn hindsight-mcp");
+
+    // Write JSON to stdin
+    {
+        let stdin = child.stdin.as_mut().expect("Failed to open stdin");
+        stdin
+            .write_all(nextest_json.as_bytes())
+            .expect("Failed to write to stdin");
+    }
+
+    let output = child.wait_with_output().expect("Failed to wait on child");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // Should succeed in dry-run mode
+    assert!(
+        output.status.success(),
+        "Command failed. stderr: {}",
+        stderr
+    );
+
+    // Should show dry-run output
+    assert!(stdout.contains("Dry-run mode"));
+    assert!(stdout.contains("Test Summary"));
+}
+
+/// Test that nextest check is performed (skip if nextest not installed)
+#[test]
+fn test_subcommand_nextest_check() {
+    use std::process::Command;
+
+    // First check if nextest is installed
+    let nextest_check = Command::new("cargo")
+        .args(["nextest", "--version"])
+        .output();
+
+    let nextest_installed = nextest_check.map(|o| o.status.success()).unwrap_or(false);
+
+    if !nextest_installed {
+        eprintln!("Skipping test: cargo-nextest not installed");
+        return;
+    }
+
+    // If nextest is installed, verify we can at least start a dry-run
+    // (this will fail if the project has no tests, but that's ok for this test)
+    let output = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args(["test", "--dry-run", "-p", "hindsight-tests"])
+        .current_dir(env!("CARGO_MANIFEST_DIR").replace("/crates/hindsight-mcp", ""))
+        .output()
+        .expect("Failed to execute hindsight-mcp");
+
+    // Should succeed
+    assert!(
+        output.status.success(),
+        "Command failed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Dry-run mode"));
+}
