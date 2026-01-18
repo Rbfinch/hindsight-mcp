@@ -107,7 +107,7 @@ jobs:
               uses: taiki-e/install-action@nextest
 
             - name: Run tests with nextest
-              run: cargo nextest run --workspace -E 'not test(dummy_failing_tests)'
+              run: cargo nextest run --workspace -E 'not binary(dummy_failing_tests)'
 
             - name: Run doc tests
               run: cargo test --workspace --doc
