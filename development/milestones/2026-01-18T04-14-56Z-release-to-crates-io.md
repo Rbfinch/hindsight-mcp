@@ -46,7 +46,7 @@
 | LICENSE file accessible | LICENSE.md or LICENSE at root | ✅ license-file configured |
 | Internal deps have versions | All `path` deps include `version` | ✅ Added v0.1.0 |
 | Dry run passes | `cargo ws publish --dry-run` succeeds | ✅ All crates packaged |
-| Main branch updated | Contains latest from dev (minus .github) | ⏳ Pending |
+| Main branch updated | Contains latest from dev (minus .github) | ✅ Synced (92bc1e9) |
 | Repository public | Visible at github.com | ⏳ Pending |
 | Published to crates.io | All 4 crates available | ⏳ Pending |
 
@@ -258,7 +258,8 @@ cargo doc --workspace --no-deps
 
 ### Phase 4: Push to Main Branch (0.25 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-18
 **Goal**: Sync main branch with dev, excluding .github folder
 **Dependencies**: Phase 3 must complete successfully
 
@@ -289,11 +290,11 @@ git diff main dev -- ':!.github'
 
 #### Success Criteria
 
-- [ ] Main branch contains all dev changes
-- [ ] .github folder not present on main
-- [ ] Main pushed to origin
+- [x] Main branch contains all dev changes
+- [x] .github folder not present on main
+- [x] Main pushed to origin
 
-**Commit**: (performed on main branch, not dev)
+**Commit**: `92bc1e9` — chore: sync main with dev for release
 
 ---
 
