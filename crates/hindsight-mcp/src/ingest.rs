@@ -9,6 +9,7 @@
 //! # Example
 //!
 //! ```no_run
+//! use hindsight_mcp::db::Database;
 //! use hindsight_mcp::ingest::{Ingestor, IngestOptions};
 //!
 //! let mut db = Database::in_memory().expect("create db");
