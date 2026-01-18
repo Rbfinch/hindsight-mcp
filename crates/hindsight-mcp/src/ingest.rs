@@ -62,7 +62,10 @@ pub enum IngestError {
 
     /// Workspace not found
     #[error("Workspace not found: {path}")]
-    WorkspaceNotFound { path: String },
+    WorkspaceNotFound {
+        /// The workspace path that could not be found
+        path: String,
+    },
 }
 
 // ============================================================================
@@ -77,19 +80,34 @@ pub type ProgressCallback = Box<dyn Fn(&ProgressEvent) + Send + Sync>;
 pub enum ProgressEvent {
     /// Starting ingestion of a source
     Started {
+        /// Name of the data source being ingested
         source: String,
+        /// Total number of items to process, if known
         total_items: Option<usize>,
     },
     /// Item processed
     Progress {
+        /// Name of the data source being ingested
         source: String,
+        /// Number of items processed so far
         processed: usize,
+        /// Total number of items, if known
         total: Option<usize>,
     },
     /// Non-fatal error occurred
-    Warning { source: String, message: String },
+    Warning {
+        /// Name of the data source where the warning occurred
+        source: String,
+        /// Description of the warning
+        message: String,
+    },
     /// Ingestion completed
-    Completed { source: String, stats: IngestStats },
+    Completed {
+        /// Name of the data source that completed
+        source: String,
+        /// Statistics from the ingestion
+        stats: IngestStats,
+    },
 }
 
 // ============================================================================

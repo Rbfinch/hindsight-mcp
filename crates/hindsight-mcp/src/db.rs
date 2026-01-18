@@ -37,7 +37,12 @@ pub enum DbError {
 
     /// Record not found
     #[error("Record not found: {table}/{id}")]
-    NotFound { table: String, id: String },
+    NotFound {
+        /// The database table that was queried
+        table: String,
+        /// The record ID that was not found
+        id: String,
+    },
 
     /// JSON serialization error
     #[error("JSON error: {0}")]

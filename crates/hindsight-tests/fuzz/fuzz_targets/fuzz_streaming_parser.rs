@@ -22,6 +22,6 @@ fuzz_target!(|data: &[u8]| {
         }
 
         // Finalize should never panic
-        let _ = parser.finish();
+        let _ = parser.into_summary();
     }
 });

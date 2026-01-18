@@ -18,13 +18,22 @@ pub enum CopilotError {
 
     /// Invalid LSP message format
     #[error("Invalid LSP message: {message}")]
-    InvalidLspMessage { message: String },
+    InvalidLspMessage {
+        /// Description of why the LSP message was invalid
+        message: String,
+    },
 
     /// Workspace storage not found
     #[error("Workspace storage not found: {path}")]
-    WorkspaceStorageNotFound { path: String },
+    WorkspaceStorageNotFound {
+        /// The path that was searched for workspace storage
+        path: String,
+    },
 
     /// Chat session not found
     #[error("Chat session not found: {session_id}")]
-    SessionNotFound { session_id: String },
+    SessionNotFound {
+        /// The session ID that could not be found
+        session_id: String,
+    },
 }

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Documentation**
+  - Added comprehensive doc comments to all public struct fields across all crates
+  - Enabled `#![warn(missing_docs)]` lint in all four crate lib.rs files
+  - Fixed 25 missing_docs warnings (struct fields in error enums and data types)
   - Restructured README with dedicated Examples section showcasing all MCP tools
   - Added examples for `hindsight_timeline`, `hindsight_search`, `hindsight_activity_summary`, `hindsight_commit_details`, and `hindsight_ingest`
   - Moved test querying examples to Examples section for better discoverability

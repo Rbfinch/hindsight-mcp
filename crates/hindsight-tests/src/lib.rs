@@ -5,7 +5,9 @@
 //!
 //! This library crate provides functionality to parse and process test results
 //! (particularly from cargo-nextest) for consumption by the hindsight-mcp server.
-//!
+
+#![warn(missing_docs)]
+
 //! # Example
 //!
 //! ```no_run

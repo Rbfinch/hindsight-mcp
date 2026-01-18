@@ -6,6 +6,8 @@
 //! This module exports the core functionality of hindsight-mcp for use in
 //! integration tests and as a library.
 
+#![warn(missing_docs)]
+
 mod migrations;
 
 pub mod config;

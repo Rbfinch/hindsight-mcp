@@ -12,11 +12,17 @@ pub enum GitError {
     #[error("Git error: {0}")]
     Git2(#[from] git2::Error),
 
-    /// Repository not found
+    /// Repository not found at the specified path
     #[error("Repository not found: {path}")]
-    RepositoryNotFound { path: String },
+    RepositoryNotFound {
+        /// The path that was searched for a repository
+        path: String,
+    },
 
-    /// Invalid commit reference
+    /// Invalid commit reference (branch, tag, or SHA)
     #[error("Invalid commit reference: {reference}")]
-    InvalidReference { reference: String },
+    InvalidReference {
+        /// The reference string that could not be resolved
+        reference: String,
+    },
 }

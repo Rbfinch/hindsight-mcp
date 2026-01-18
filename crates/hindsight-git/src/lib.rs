@@ -5,7 +5,9 @@
 //!
 //! This library crate provides functionality to parse and process git logs
 //! for consumption by the hindsight-mcp server.
-//!
+
+#![warn(missing_docs)]
+
 //! # Example
 //!
 //! ```no_run

@@ -5,7 +5,9 @@
 //!
 //! This library crate provides functionality to parse and process GitHub Copilot
 //! logs and chat sessions for consumption by the hindsight-mcp server.
-//!
+
+#![warn(missing_docs)]
+
 //! ## Log Locations
 //!
 //! VS Code stores Copilot chat history in local SQLite databases and JSON files:

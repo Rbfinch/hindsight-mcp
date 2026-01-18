@@ -18,5 +18,8 @@ pub enum TestsError {
 
     /// Invalid test result format
     #[error("Invalid test result format: {message}")]
-    InvalidFormat { message: String },
+    InvalidFormat {
+        /// Description of the format error
+        message: String,
+    },
 }

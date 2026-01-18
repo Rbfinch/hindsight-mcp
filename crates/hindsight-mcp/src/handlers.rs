@@ -165,12 +165,19 @@ pub struct IngestResponse {
 /// Serializable ingest stats
 #[derive(Debug, Clone, Serialize)]
 pub struct IngestStatsResponse {
+    /// Number of commits inserted into the database
     pub commits_inserted: usize,
+    /// Number of commits skipped (already present)
     pub commits_skipped: usize,
+    /// Number of test runs inserted
     pub test_runs_inserted: usize,
+    /// Number of individual test results inserted
     pub test_results_inserted: usize,
+    /// Number of Copilot chat sessions inserted
     pub sessions_inserted: usize,
+    /// Number of chat messages inserted
     pub messages_inserted: usize,
+    /// Total number of items processed
     pub total_items: usize,
 }
 
