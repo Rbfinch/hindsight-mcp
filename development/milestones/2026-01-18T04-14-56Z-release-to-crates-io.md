@@ -47,7 +47,7 @@
 | Internal deps have versions | All `path` deps include `version` | ✅ Added v0.1.0 |
 | Dry run passes | `cargo ws publish --dry-run` succeeds | ✅ All crates packaged |
 | Main branch updated | Contains latest from dev (minus .github) | ✅ Synced (92bc1e9) |
-| Repository public | Visible at github.com | ⏳ Pending |
+| Repository public | Visible at github.com | ✅ Public |
 | Published to crates.io | All 4 crates available | ⏳ Pending |
 
 ---
@@ -300,7 +300,8 @@ git diff main dev -- ':!.github'
 
 ### Phase 5: Make Repository Public (0.25 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-18
 **Goal**: Change GitHub repository visibility from private to public
 **Dependencies**: Phase 4 must complete successfully
 
@@ -331,11 +332,11 @@ curl -s "https://api.github.com/repos/Rbfinch/hindsight-mcp" | grep '"private"'
 
 #### Success Criteria
 
-- [ ] Repository visible publicly
-- [ ] No sensitive data exposed
-- [ ] README renders correctly
+- [x] Repository visible publicly
+- [x] No sensitive data exposed
+- [x] README renders correctly
 
-**Commit**: `docs: update repository for public release`
+**Verified**: `"private": false` confirmed via GitHub API
 
 ---
 
