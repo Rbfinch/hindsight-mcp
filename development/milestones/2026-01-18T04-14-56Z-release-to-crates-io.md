@@ -42,8 +42,8 @@
 | cargo-workspaces installed | Available in PATH | ✅ v0.4.2 |
 | All tests pass locally | `cargo nextest run` succeeds | ✅ 286/290 (4 intentional) |
 | CI workflow passes | GitHub Actions green | ✅ Run 21106394522 |
-| Repository URL correct | `https://github.com/Rbfinch/hindsight-mcp` | ⏳ Pending |
-| LICENSE file accessible | LICENSE.md or LICENSE at root | ⏳ Pending |
+| Repository URL correct | `https://github.com/Rbfinch/hindsight-mcp` | ✅ Updated |
+| LICENSE file accessible | LICENSE.md or LICENSE at root | ✅ license-file configured |
 | Internal deps have versions | All `path` deps include `version` | ⏳ Pending |
 | Dry run passes | `cargo ws publish --dry-run` succeeds | ⏳ Pending |
 | Main branch updated | Contains latest from dev (minus .github) | ⏳ Pending |
@@ -117,7 +117,8 @@ cargo fmt --all --check
 
 ### Phase 1: Workspace Hygiene (1 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-18
 **Goal**: Ensure all Cargo.toml files meet crates.io publishing requirements
 **Dependencies**: Phase 0 must complete successfully
 
@@ -165,12 +166,12 @@ cargo ws list --all
 
 #### Success Criteria
 
-- [ ] Repository URL points to Rbfinch/hindsight-mcp
-- [ ] LICENSE file accessible
-- [ ] All crates have categories and keywords
-- [ ] Documentation links configured
+- [x] Repository URL points to Rbfinch/hindsight-mcp
+- [x] LICENSE file accessible (license-file = "LICENSE.md" added)
+- [x] All crates have categories and keywords
+- [x] Documentation links configured (docs.rs)
 
-**Commit**: `chore: prepare workspace metadata for crates.io`
+**Commit**: `chore: prepare workspace metadata for crates.io` (c437a17)
 
 ---
 
