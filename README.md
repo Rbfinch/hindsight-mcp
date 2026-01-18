@@ -1,5 +1,7 @@
 # hindsight-mcp
 
+[![CI](https://github.com/Rbfinch/hindsight-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Rbfinch/hindsight-mcp/actions/workflows/ci.yml)
+
 An MCP server for AI-assisted coding that leverages development history.
 
 ## Overview
