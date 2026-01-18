@@ -11,6 +11,8 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug, Clone, Default)]
 #[command(name = "hindsight-mcp")]
 #[command(version, about, long_about = None)]
+#[command(author = "Nicholas D. Crosbie")]
+#[command(after_help = "Author: Nicholas D. Crosbie\nLicense: MIT")]
 pub struct Config {
     /// Subcommand to run (defaults to MCP server mode)
     #[command(subcommand)]

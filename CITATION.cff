@@ -1,0 +1,19 @@
+cff-version: "1.2.0"
+title: "hindsight-mcp - MCP server bridging AI and development history"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: Crosbie
+    given-names: Nicholas D.
+    email: nicholas.crosbie@unimelb.edu.au
+    orcid: "https://orcid.org/0000-0002-0319-4248"
+repository-code: "https://github.com/Rbfinch/hindsight-mcp"
+license: MIT
+keywords:
+  - mcp
+  - model-context-protocol
+  - ai
+  - development-history
+  - git
+  - test-results
+  - rust

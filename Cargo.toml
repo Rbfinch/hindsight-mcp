@@ -13,6 +13,7 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/your-org/hindsight-mcp"
 rust-version = "1.85"
+authors = ["Nicholas D. Crosbie"]
 
 [workspace.dependencies]
 # Internal crates
