@@ -457,10 +457,11 @@ fn urlencoding_decode(s: &str) -> String {
         if c == '%' {
             let hex: String = chars.by_ref().take(2).collect();
             if hex.len() == 2
-                && let Ok(byte) = u8::from_str_radix(&hex, 16) {
-                    result.push(byte as char);
-                    continue;
-                }
+                && let Ok(byte) = u8::from_str_radix(&hex, 16)
+            {
+                result.push(byte as char);
+                continue;
+            }
             result.push('%');
             result.push_str(&hex);
         } else {
@@ -797,10 +798,12 @@ fn extract_response_text(response_parts: &[RawResponsePart]) -> String {
             Some("thinking") => {
                 // Include thinking content if it has meaningful text
                 if let Some(serde_json::Value::String(s)) = &part.value
-                    && !s.is_empty() && s.len() < 500 {
-                        // Skip encrypted/encoded thinking
-                        text_parts.push(s.clone());
-                    }
+                    && !s.is_empty()
+                    && s.len() < 500
+                {
+                    // Skip encrypted/encoded thinking
+                    text_parts.push(s.clone());
+                }
             }
             Some("textEditGroup") | Some("codeblockUri") | Some("prepareToolInvocation") => {
                 // Skip these - they're tool-related, not text
@@ -810,9 +813,10 @@ fn extract_response_text(response_parts: &[RawResponsePart]) -> String {
                 if let Some(serde_json::Value::String(s)) = &part.value {
                     text_parts.push(s.clone());
                 } else if let Some(serde_json::Value::Object(obj)) = &part.value
-                    && let Some(serde_json::Value::String(s)) = obj.get("value") {
-                        text_parts.push(s.clone());
-                    }
+                    && let Some(serde_json::Value::String(s)) = obj.get("value")
+                {
+                    text_parts.push(s.clone());
+                }
             }
         }
     }

@@ -344,9 +344,10 @@ impl StreamingParser {
         match event {
             LibtestEvent::Suite(suite) => {
                 if suite.event == "started"
-                    && let Some(count) = suite.test_count {
-                        self.total = count;
-                    }
+                    && let Some(count) = suite.test_count
+                {
+                    self.total = count;
+                }
                 Ok(None)
             }
             LibtestEvent::Test(test) => {

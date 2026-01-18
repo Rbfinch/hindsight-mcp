@@ -134,9 +134,10 @@ fn test_extract_variables_from_requests() {
         if let Some(variables) = request["variableData"]["variables"].as_array() {
             for var in variables {
                 if var["kind"] == "file"
-                    && let Some(name) = var["name"].as_str() {
-                        files_referenced.push(name.to_string());
-                    }
+                    && let Some(name) = var["name"].as_str()
+                {
+                    files_referenced.push(name.to_string());
+                }
             }
         }
     }
@@ -258,18 +259,19 @@ fn test_discover_real_chat_sessions() {
                 for entry in entries.flatten() {
                     let chat_dir = entry.path().join("chatSessions");
                     if chat_dir.exists()
-                        && let Ok(files) = std::fs::read_dir(&chat_dir) {
-                            for file in files.flatten() {
-                                if file
-                                    .path()
-                                    .extension()
-                                    .map(|e| e == "json")
-                                    .unwrap_or(false)
-                                {
-                                    session_count += 1;
-                                }
+                        && let Ok(files) = std::fs::read_dir(&chat_dir)
+                    {
+                        for file in files.flatten() {
+                            if file
+                                .path()
+                                .extension()
+                                .map(|e| e == "json")
+                                .unwrap_or(false)
+                            {
+                                session_count += 1;
                             }
                         }
+                    }
                 }
             }
 

@@ -205,13 +205,15 @@ impl GitRepo {
 
             // Apply date filters
             if let Some(since) = options.since
-                && timestamp < since {
-                    continue;
-                }
+                && timestamp < since
+            {
+                continue;
+            }
             if let Some(until) = options.until
-                && timestamp > until {
-                    continue;
-                }
+                && timestamp > until
+            {
+                continue;
+            }
 
             // Extract commit data
             let commit = self.extract_commit(&git_commit, timestamp)?;
