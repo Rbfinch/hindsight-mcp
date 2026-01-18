@@ -1644,3 +1644,176 @@ fn test_subcommand_explicit_commit_flag() {
         stdout
     );
 }
+
+/// Test end-to-end: run tests and ingest to database
+#[test]
+fn test_subcommand_e2e_ingestion() {
+    use std::fs;
+    use std::process::Command;
+
+    // First check if nextest is installed
+    let nextest_check = Command::new("cargo")
+        .args(["nextest", "--version"])
+        .output();
+
+    let nextest_installed = nextest_check.map(|o| o.status.success()).unwrap_or(false);
+
+    if !nextest_installed {
+        eprintln!("Skipping test: cargo-nextest not installed");
+        return;
+    }
+
+    // Create a temporary database
+    let temp_dir = std::env::temp_dir().join("hindsight_e2e_test");
+    let _ = fs::create_dir_all(&temp_dir);
+    let db_path = temp_dir.join("e2e_test.db");
+
+    // Clean up from previous runs
+    let _ = fs::remove_file(&db_path);
+
+    // Run hindsight-mcp test with a real package (hindsight-tests has simple tests)
+    let output = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args([
+            "--database",
+            db_path.to_str().unwrap(),
+            "test",
+            "-p",
+            "hindsight-tests",
+        ])
+        .current_dir(env!("CARGO_MANIFEST_DIR").replace("/crates/hindsight-mcp", ""))
+        .output()
+        .expect("Failed to execute hindsight-mcp");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "Command failed.\nstdout: {}\nstderr: {}",
+        stdout,
+        stderr
+    );
+
+    // Verify the output shows ingestion
+    assert!(
+        stdout.contains("Ingested"),
+        "Expected ingestion confirmation in output, got: {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("test results"),
+        "Expected 'test results' in output, got: {}",
+        stdout
+    );
+
+    // Verify database was created and has data
+    assert!(db_path.exists(), "Database file should exist");
+
+    // Open database and verify test run was created
+    let db = Database::open(&db_path).expect("Failed to open database");
+    let test_run_count = db.count("test_runs").expect("Failed to count test_runs");
+    let test_result_count = db
+        .count("test_results")
+        .expect("Failed to count test_results");
+
+    assert!(
+        test_run_count >= 1,
+        "Expected at least 1 test run, got {}",
+        test_run_count
+    );
+    assert!(
+        test_result_count >= 1,
+        "Expected at least 1 test result, got {}",
+        test_result_count
+    );
+
+    println!(
+        "E2E test passed: {} test runs, {} test results ingested",
+        test_run_count, test_result_count
+    );
+
+    // Cleanup
+    let _ = fs::remove_file(&db_path);
+    let _ = fs::remove_dir(&temp_dir);
+}
+
+/// Test that --stdin mode ingests to database correctly
+#[test]
+fn test_subcommand_stdin_ingestion() {
+    use std::fs;
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    // Create a temporary database
+    let temp_dir = std::env::temp_dir().join("hindsight_stdin_test");
+    let _ = fs::create_dir_all(&temp_dir);
+    let db_path = temp_dir.join("stdin_test.db");
+
+    // Clean up from previous runs
+    let _ = fs::remove_file(&db_path);
+
+    // Sample nextest JSON output (minimal valid format)
+    let nextest_json = r#"{ "type": "suite", "event": "started", "test_count": 2 }
+{ "type": "test", "event": "started", "name": "test_one" }
+{ "type": "test", "name": "test_one", "event": "ok", "exec_time": 0.001 }
+{ "type": "test", "event": "started", "name": "test_two" }
+{ "type": "test", "name": "test_two", "event": "ok", "exec_time": 0.002 }
+{ "type": "suite", "event": "ok", "passed": 2, "failed": 0, "ignored": 0 }
+"#;
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_hindsight-mcp"))
+        .args([
+            "--database",
+            db_path.to_str().unwrap(),
+            "test",
+            "--stdin",
+            "--no-commit",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .current_dir(env!("CARGO_MANIFEST_DIR").replace("/crates/hindsight-mcp", ""))
+        .spawn()
+        .expect("Failed to spawn hindsight-mcp");
+
+    // Write JSON to stdin
+    {
+        let stdin = child.stdin.as_mut().expect("Failed to open stdin");
+        stdin
+            .write_all(nextest_json.as_bytes())
+            .expect("Failed to write to stdin");
+    }
+
+    let output = child.wait_with_output().expect("Failed to wait on child");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "Command failed.\nstdout: {}\nstderr: {}",
+        stdout,
+        stderr
+    );
+
+    // Verify the output shows ingestion
+    assert!(
+        stdout.contains("Ingested"),
+        "Expected ingestion confirmation, got: {}",
+        stdout
+    );
+
+    // Verify database has data
+    let db = Database::open(&db_path).expect("Failed to open database");
+    let test_run_count = db.count("test_runs").expect("Failed to count");
+    let test_result_count = db.count("test_results").expect("Failed to count");
+
+    assert_eq!(test_run_count, 1, "Expected 1 test run");
+    assert_eq!(test_result_count, 2, "Expected 2 test results");
+
+    println!("Stdin ingestion test passed");
+
+    // Cleanup
+    let _ = fs::remove_file(&db_path);
+    let _ = fs::remove_dir(&temp_dir);
+}

@@ -510,19 +510,38 @@ async fn run_test(
             println!("  Commit:  (none)");
         }
         println!("\nWorkspace: {}", workspace.display());
+        println!("Database:  {}", config.database_path().display());
         return Ok(());
     }
 
-    // TODO: Phase 3 - Ingest to database
-    // For now, just print summary
+    // Initialize database
+    let db = init_database(config)?;
+
+    // Run ingestion
+    info!("Ingesting test results to database");
+    let mut ingestor = Ingestor::new(db);
+    let stats = ingestor.ingest_tests(&workspace, &json_output, commit_sha.as_deref())?;
+
+    // Report results
+    info!(
+        tests_inserted = stats.test_results_inserted,
+        runs_inserted = stats.test_runs_inserted,
+        "Test ingestion complete"
+    );
+
     println!("Test run completed:");
     println!("  Total:   {}", summary.results.len());
     println!("  Passed:  {}", summary.passed);
     println!("  Failed:  {}", summary.failed);
     println!("  Ignored: {}", summary.ignored);
+    if let Some(ref sha) = commit_sha {
+        println!("  Commit:  {}", sha);
+    }
     println!();
-    eprintln!("Note: Database ingestion not yet implemented (Phase 3)");
-    eprintln!("      Results were captured but not persisted.");
+    println!(
+        "Ingested {} test results in {} test run(s)",
+        stats.test_results_inserted, stats.test_runs_inserted
+    );
 
     Ok(())
 }
