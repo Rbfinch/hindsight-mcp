@@ -74,6 +74,69 @@ pub enum Command {
         #[arg(long)]
         commit: Option<String>,
     },
+
+    /// Run tests and ingest results in one command
+    ///
+    /// This command wraps cargo-nextest, runs your tests, and automatically
+    /// ingests the results into the hindsight database. It auto-detects the
+    /// workspace and current git commit.
+    ///
+    /// Examples:
+    ///   hindsight-mcp test                    # Run all tests and ingest
+    ///   hindsight-mcp test -p my-crate        # Test specific package
+    ///   hindsight-mcp test --dry-run          # Preview without ingesting
+    ///   hindsight-mcp test --stdin            # Read from stdin (CI mode)
+    #[command(after_help = "Requires cargo-nextest to be installed.\n\
+        Install with: cargo install cargo-nextest")]
+    Test {
+        /// Package(s) to test (passed to cargo nextest --package)
+        #[arg(short, long)]
+        package: Vec<String>,
+
+        /// Test binary(ies) to run (passed to cargo nextest --bin)
+        #[arg(long)]
+        bin: Vec<String>,
+
+        /// Run only tests matching this filter expression
+        #[arg(short = 'E', long)]
+        filter: Option<String>,
+
+        /// Read nextest JSON from stdin instead of running tests
+        ///
+        /// Use this for custom nextest invocations or CI pipelines.
+        /// When set, cargo-nextest is not spawned; JSON is read from stdin.
+        #[arg(long)]
+        stdin: bool,
+
+        /// Don't actually ingest - just show what would be ingested
+        ///
+        /// Runs tests and parses output, but does not write to the database.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Don't auto-detect and link to current git commit
+        #[arg(long, conflicts_with = "commit")]
+        no_commit: bool,
+
+        /// Explicit commit SHA to associate with test run
+        ///
+        /// Overrides auto-detection of the current git HEAD.
+        #[arg(long, conflicts_with = "no_commit")]
+        commit: Option<String>,
+
+        /// Show test output in terminal
+        ///
+        /// By default, test output is suppressed. Use this flag to see
+        /// test progress and output in real-time.
+        #[arg(long)]
+        show_output: bool,
+
+        /// Additional arguments passed to cargo nextest
+        ///
+        /// Everything after `--` is passed through to nextest.
+        #[arg(last = true)]
+        nextest_args: Vec<String>,
+    },
 }
 
 impl Config {
@@ -266,5 +329,170 @@ mod tests {
     fn verify_cli() {
         use clap::CommandFactory;
         Config::command().debug_assert();
+    }
+
+    // ========================================================================
+    // Test subcommand CLI parsing tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_test_command_minimal() {
+        let config = Config::try_parse_from(["hindsight-mcp", "test"]).expect("parse");
+        match config.command {
+            Some(Command::Test {
+                package,
+                bin,
+                filter,
+                stdin,
+                dry_run,
+                no_commit,
+                commit,
+                show_output,
+                nextest_args,
+            }) => {
+                assert!(package.is_empty());
+                assert!(bin.is_empty());
+                assert!(filter.is_none());
+                assert!(!stdin);
+                assert!(!dry_run);
+                assert!(!no_commit);
+                assert!(commit.is_none());
+                assert!(!show_output);
+                assert!(nextest_args.is_empty());
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_with_package() {
+        let config =
+            Config::try_parse_from(["hindsight-mcp", "test", "-p", "my-crate"]).expect("parse");
+        match config.command {
+            Some(Command::Test { package, .. }) => {
+                assert_eq!(package, vec!["my-crate"]);
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_with_multiple_packages() {
+        let config =
+            Config::try_parse_from(["hindsight-mcp", "test", "-p", "crate-a", "-p", "crate-b"])
+                .expect("parse");
+        match config.command {
+            Some(Command::Test { package, .. }) => {
+                assert_eq!(package, vec!["crate-a", "crate-b"]);
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_with_flags() {
+        let config = Config::try_parse_from([
+            "hindsight-mcp",
+            "test",
+            "--dry-run",
+            "--show-output",
+            "--stdin",
+        ])
+        .expect("parse");
+        match config.command {
+            Some(Command::Test {
+                dry_run,
+                show_output,
+                stdin,
+                ..
+            }) => {
+                assert!(dry_run);
+                assert!(show_output);
+                assert!(stdin);
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_with_commit() {
+        let config =
+            Config::try_parse_from(["hindsight-mcp", "test", "--commit", "abc123"]).expect("parse");
+        match config.command {
+            Some(Command::Test { commit, .. }) => {
+                assert_eq!(commit, Some("abc123".to_string()));
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_with_no_commit() {
+        let config =
+            Config::try_parse_from(["hindsight-mcp", "test", "--no-commit"]).expect("parse");
+        match config.command {
+            Some(Command::Test { no_commit, .. }) => {
+                assert!(no_commit);
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_commit_conflicts_with_no_commit() {
+        // --commit and --no-commit should conflict
+        let result =
+            Config::try_parse_from(["hindsight-mcp", "test", "--commit", "abc123", "--no-commit"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_test_command_with_filter() {
+        let config = Config::try_parse_from(["hindsight-mcp", "test", "-E", "test(/integration/)"])
+            .expect("parse");
+        match config.command {
+            Some(Command::Test { filter, .. }) => {
+                assert_eq!(filter, Some("test(/integration/)".to_string()));
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_with_passthrough_args() {
+        let config = Config::try_parse_from([
+            "hindsight-mcp",
+            "test",
+            "-p",
+            "my-crate",
+            "--",
+            "--retries",
+            "3",
+            "--no-fail-fast",
+        ])
+        .expect("parse");
+        match config.command {
+            Some(Command::Test {
+                package,
+                nextest_args,
+                ..
+            }) => {
+                assert_eq!(package, vec!["my-crate"]);
+                assert_eq!(nextest_args, vec!["--retries", "3", "--no-fail-fast"]);
+            }
+            _ => panic!("Expected Test command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_with_bin() {
+        let config =
+            Config::try_parse_from(["hindsight-mcp", "test", "--bin", "my-bin"]).expect("parse");
+        match config.command {
+            Some(Command::Test { bin, .. }) => {
+                assert_eq!(bin, vec!["my-bin"]);
+            }
+            _ => panic!("Expected Test command"),
+        }
     }
 }

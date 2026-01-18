@@ -127,6 +127,31 @@ async fn main() -> anyhow::Result<()> {
         Some(Command::Ingest { tests, commit }) => {
             run_ingest(&config, *tests, commit.clone()).await
         }
+        Some(Command::Test {
+            package,
+            bin,
+            filter,
+            stdin,
+            dry_run,
+            no_commit,
+            commit,
+            show_output,
+            nextest_args,
+        }) => {
+            run_test(
+                &config,
+                package.clone(),
+                bin.clone(),
+                filter.clone(),
+                *stdin,
+                *dry_run,
+                *no_commit,
+                commit.clone(),
+                *show_output,
+                nextest_args.clone(),
+            )
+            .await
+        }
         None => {
             // Default: run MCP server
             run_server(config).await
@@ -193,6 +218,67 @@ async fn run_ingest(config: &Config, tests: bool, commit: Option<String>) -> any
     );
 
     Ok(())
+}
+
+/// Run tests and ingest results (stub implementation)
+///
+/// This command wraps cargo-nextest, runs tests, and ingests results.
+#[allow(clippy::too_many_arguments)]
+async fn run_test(
+    config: &Config,
+    package: Vec<String>,
+    bin: Vec<String>,
+    filter: Option<String>,
+    stdin: bool,
+    dry_run: bool,
+    no_commit: bool,
+    commit: Option<String>,
+    show_output: bool,
+    nextest_args: Vec<String>,
+) -> anyhow::Result<()> {
+    // Initialize logging for CLI mode
+    let filter_directive = EnvFilter::from_default_env().add_directive(config.log_level().into());
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter_directive)
+        .with_writer(std::io::stderr)
+        .with_ansi(true)
+        .init();
+
+    info!("hindsight-mcp test subcommand");
+
+    // Log the parsed options for debugging
+    debug!(
+        packages = ?package,
+        binaries = ?bin,
+        filter = ?filter,
+        stdin = stdin,
+        dry_run = dry_run,
+        no_commit = no_commit,
+        commit = ?commit,
+        show_output = show_output,
+        nextest_args = ?nextest_args,
+        "Test command options"
+    );
+
+    // TODO: Phase 1 - Implement nextest spawning
+    // TODO: Phase 2 - Implement git commit auto-detection
+    // TODO: Phase 3 - Implement full ingestion integration
+
+    eprintln!("Error: The 'test' subcommand is not yet fully implemented.");
+    eprintln!();
+    eprintln!("Coming soon:");
+    eprintln!("  - Run cargo-nextest and capture JSON output");
+    eprintln!("  - Auto-detect git commit from HEAD");
+    eprintln!("  - Ingest test results to database");
+    eprintln!();
+    eprintln!("For now, use the existing workflow:");
+    eprintln!(
+        "  NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json | \\"
+    );
+    eprintln!("    hindsight-mcp ingest --tests");
+
+    std::process::exit(1);
 }
 
 /// Run the MCP server
