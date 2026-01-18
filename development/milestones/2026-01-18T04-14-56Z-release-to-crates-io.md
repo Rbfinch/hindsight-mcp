@@ -1,8 +1,9 @@
 # MILESTONE: Release to crates.io
 
-**Status**: 🔄 IN PROGRESS
-**Priority**: 🔴 CRITICAL
+**Status**: ✅ COMPLETED
+**Priority**: 🟢 DONE
 **Created**: 2026-01-18T04:14:56Z
+**Completed**: 2026-01-18
 **Estimated Duration**: 2.5 sessions
 
 ---
@@ -48,7 +49,7 @@
 | Dry run passes | `cargo ws publish --dry-run` succeeds | ✅ All crates packaged |
 | Main branch updated | Contains latest from dev (minus .github) | ✅ Synced (92bc1e9) |
 | Repository public | Visible at github.com | ✅ Public |
-| Published to crates.io | All 4 crates available | ⏳ Pending |
+| Published to crates.io | All 4 crates available | ✅ v0.1.1 |
 
 ---
 
@@ -342,7 +343,8 @@ curl -s "https://api.github.com/repos/Rbfinch/hindsight-mcp" | grep '"private"'
 
 ### Phase 6: Publish to crates.io (0.5 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-18
 **Goal**: Publish all workspace crates to crates.io
 **Dependencies**: Phase 5 must complete successfully
 
@@ -379,11 +381,16 @@ cargo install hindsight-mcp --dry-run
 
 #### Success Criteria
 
-- [ ] All 4 crates published to crates.io
-- [ ] Documentation available on docs.rs
-- [ ] `cargo install hindsight-mcp` works
+- [x] All 4 crates published to crates.io
+- [x] Documentation available on docs.rs
+- [x] `cargo install hindsight-mcp` works
 
-**Commit**: `chore: release v0.1.0 to crates.io`
+**Published Version**: v0.1.1
+**Crates**:
+- https://crates.io/crates/hindsight-copilot
+- https://crates.io/crates/hindsight-git
+- https://crates.io/crates/hindsight-tests
+- https://crates.io/crates/hindsight-mcp
 
 ---
 
