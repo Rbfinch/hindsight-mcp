@@ -44,7 +44,7 @@
 | CI workflow passes | GitHub Actions green | ✅ Run 21106394522 |
 | Repository URL correct | `https://github.com/Rbfinch/hindsight-mcp` | ✅ Updated |
 | LICENSE file accessible | LICENSE.md or LICENSE at root | ✅ license-file configured |
-| Internal deps have versions | All `path` deps include `version` | ⏳ Pending |
+| Internal deps have versions | All `path` deps include `version` | ✅ Added v0.1.0 |
 | Dry run passes | `cargo ws publish --dry-run` succeeds | ⏳ Pending |
 | Main branch updated | Contains latest from dev (minus .github) | ⏳ Pending |
 | Repository public | Visible at github.com | ⏳ Pending |
@@ -177,7 +177,8 @@ cargo ws list --all
 
 ### Phase 2: Internal Dependency Versioning (0.5 session)
 
-**Status**: ⏳ not-started
+**Status**: ✅ completed
+**Completed**: 2026-01-18
 **Goal**: Ensure internal dependencies specify versions for crates.io publishing
 **Dependencies**: Phase 1 must complete successfully
 
@@ -209,10 +210,10 @@ cargo tree --workspace
 
 #### Success Criteria
 
-- [ ] All internal dependencies have version specifiers
-- [ ] Workspace builds successfully
+- [x] All internal dependencies have version specifiers
+- [x] Workspace builds successfully
 
-**Commit**: `chore: add version specifiers to internal dependencies`
+**Commit**: `chore: add version specifiers to internal dependencies` (bb7691e)
 
 ---
 
