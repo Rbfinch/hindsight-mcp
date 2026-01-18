@@ -8,7 +8,7 @@ However, I greatly value your input and encourage you to contribute in the follo
 
 ## Bug Reports
 
-If you encounter a bug or unexpected behavior, please submit a detailed bug report via a GitHub issue. To help me quickly address the issue, please include the following information:
+If you encounter a bug or unexpected behavior, or bogus or incomplete documentation, please submit a detailed report via a GitHub issue. To help me quickly address the issue, please include the following information:
 
 * **A clear and descriptive title.**
 * **Steps to reproduce the bug.**
@@ -25,3 +25,7 @@ I welcome your ideas for new features and improvements! Please submit feature re
 * **A detailed description of the proposed feature.**
 * **The motivation behind the feature.**
 * **Any potential use cases.**
+
+## Afterward
+
+Coding is something I do for fun and learning, and I appreciate your understanding that I may not be able to review or merge contributions at this time. Your feedback through issues is invaluable in helping me improve the project.

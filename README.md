@@ -6,14 +6,19 @@ An MCP server for AI-assisted coding that leverages development history.
 
 ## Overview
 
-hindsight-mcp consolidates various "development data" stored locally (git logs, test results, and GitHub Copilot logs) into a well-structured, searchable SQLite database, making it accessible to an LLM through MCP tool calls within VS Code.
+**hindsight-mcp** consolidates various "development data" stored locally (git logs, nextest test results, and GitHub Copilot logs) into a well-structured, searchable SQLite database, making it accessible to an AI assistant through MCP tool calls within VS Code. It is designed to help Rust developers and an AI assistant gain insights into their coding history, find relevant information quickly, and improve productivity by providing context-aware assistance.
 
 ## Quick Start
 
-### 1. Build
+### Installation
 
+**Option A: Install from crates.io** (recommended)
 ```bash
-# Clone and build
+cargo install hindsight-mcp
+```
+
+**Option B: Build from source**
+```bash
 git clone https://github.com/Rbfinch/hindsight-mcp.git
 cd hindsight-mcp
 cargo build --release
@@ -21,7 +26,7 @@ cargo build --release
 # The binary is at ./target/release/hindsight-mcp
 ```
 
-### 2. Configure VS Code
+### Configure VS Code
 
 Add to `.vscode/mcp.json` in your project:
 
@@ -30,14 +35,16 @@ Add to `.vscode/mcp.json` in your project:
   "servers": {
     "hindsight": {
       "type": "stdio",
-      "command": "/path/to/hindsight-mcp",
+      "command": "hindsight-mcp",
       "args": ["--workspace", "${workspaceFolder}"]
     }
   }
 }
 ```
 
-### 3. First Run
+> **Note:** If installed via `cargo install`, `hindsight-mcp` will be in your PATH. Otherwise, use the full path to the binary.
+
+### First Run
 
 On first use, ingest your development history:
 
@@ -369,6 +376,23 @@ Override with `--database` or `HINDSIGHT_DATABASE`.
 
 The server logs to stderr to avoid interfering with MCP stdio transport. Use `--quiet` in production.
 
+## Dependencies
+
+hindsight-mcp bundles its native dependencies for ease of installation:
+
+| Dependency | Purpose | Notes |
+|------------|---------|-------|
+| `rusqlite` | SQLite database | Bundled; no system SQLite required |
+| `git2` | Git repository access | Uses bundled libgit2 |
+| `rust-mcp-sdk` | MCP protocol | Pure Rust |
+| `tokio` | Async runtime | Pure Rust |
+
+### System Requirements
+
+- **Rust**: 1.89 or later (for building from source)
+- **OS**: Linux, macOS, or Windows
+- **No additional system libraries required** — all native dependencies are bundled
+
 ## Workspace Structure
 
 ```
@@ -401,6 +425,15 @@ Processes GitHub Copilot logs and chat sessions.
 
 ## Development
 
+This project uses [cargo-nextest](https://nexte.st/) as its test runner for faster, more reliable test execution.
+
+### Prerequisites
+
+```bash
+# Install cargo-nextest (required for running tests)
+cargo install cargo-nextest
+```
+
 ### Building
 
 ```bash
@@ -410,7 +443,11 @@ cargo build --workspace
 ### Testing
 
 ```bash
+# Run tests with nextest (recommended)
 cargo nextest run --workspace
+
+# Or use standard cargo test for doc tests
+cargo test --workspace --doc
 ```
 
 ### Benchmarks
