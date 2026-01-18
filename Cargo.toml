@@ -19,9 +19,9 @@ authors = ["Nicholas D. Crosbie"]
 
 [workspace.dependencies]
 # Internal crates
-hindsight-git = { path = "crates/hindsight-git" }
-hindsight-tests = { path = "crates/hindsight-tests" }
-hindsight-copilot = { path = "crates/hindsight-copilot" }
+hindsight-git = { path = "crates/hindsight-git", version = "0.1.0" }
+hindsight-tests = { path = "crates/hindsight-tests", version = "0.1.0" }
+hindsight-copilot = { path = "crates/hindsight-copilot", version = "0.1.0" }
 
 # Error handling
 thiserror = "2.0.17"
