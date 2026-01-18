@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Integration tests for hindsight-git
 //!
 //! These tests use the actual git repository to verify parsing functionality.

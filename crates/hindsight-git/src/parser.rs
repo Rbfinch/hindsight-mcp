@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Git log parsing utilities
 //!
 //! This module provides functionality to parse git commits from a repository

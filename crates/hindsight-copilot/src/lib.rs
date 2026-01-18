@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! hindsight-copilot: GitHub Copilot log processing for hindsight-mcp
 //!
 //! This library crate provides functionality to parse and process GitHub Copilot

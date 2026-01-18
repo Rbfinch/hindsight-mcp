@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use hindsight_mcp::db::Database;
 use hindsight_mcp::queries;

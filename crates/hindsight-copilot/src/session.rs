@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Chat session types, discovery, and parsing
 //!
 //! This module provides:

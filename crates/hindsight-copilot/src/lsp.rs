@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! LSP types and parsing for Copilot logs
 //!
 //! GitHub Copilot operates as a Language Server, so its log data follows

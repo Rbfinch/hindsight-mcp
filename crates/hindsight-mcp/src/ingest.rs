@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Unified data ingestion API
 //!
 //! This module provides a high-level API for ingesting development data from all sources

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 use criterion::{Criterion, criterion_group, criterion_main};
 
 fn git_benchmark(c: &mut Criterion) {

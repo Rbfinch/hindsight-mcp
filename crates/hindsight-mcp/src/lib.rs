@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! hindsight-mcp library
 //!
 //! This module exports the core functionality of hindsight-mcp for use in

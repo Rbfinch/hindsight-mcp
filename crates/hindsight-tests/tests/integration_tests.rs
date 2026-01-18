@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Integration tests for hindsight-tests
 //!
 //! These tests verify parsing of real nextest output and test result handling.

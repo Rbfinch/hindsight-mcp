@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Tool handlers for the MCP server
 //!
 //! This module implements the handlers for each MCP tool, bridging

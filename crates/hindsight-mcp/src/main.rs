@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! hindsight-mcp: MCP server for AI-assisted coding with development history
 //!
 //! This binary crate provides an MCP server that consolidates development data

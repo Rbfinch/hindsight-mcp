@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Query helper functions for hindsight-mcp database
 //!
 //! This module provides high-level query functions for searching and

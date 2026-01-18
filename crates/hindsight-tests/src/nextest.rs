@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Nextest output parsing
 //!
 //! This module provides functionality to parse cargo-nextest output in various formats:

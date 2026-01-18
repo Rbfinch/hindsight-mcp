@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! JSON stream parser for Copilot logs
 
 use serde_json::StreamDeserializer;

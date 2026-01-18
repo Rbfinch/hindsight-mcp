@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;

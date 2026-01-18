@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Dummy failing tests for testing hindsight_failing_tests functionality
 //!
 //! These tests are intentionally designed to fail to populate the failing_tests view.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Configuration for the hindsight-mcp server
 //!
 //! This module provides configuration types and utilities for the MCP server,
@@ -12,7 +15,7 @@ use clap::{Parser, Subcommand};
 #[command(name = "hindsight-mcp")]
 #[command(version, about, long_about = None)]
 #[command(author = "Nicholas D. Crosbie")]
-#[command(after_help = "Author: Nicholas D. Crosbie\nLicense: MIT")]
+#[command(after_help = "Copyright (c) 2026 - present Nicholas D. Crosbie\nLicense: MIT")]
 pub struct Config {
     /// Subcommand to run (defaults to MCP server mode)
     #[command(subcommand)]

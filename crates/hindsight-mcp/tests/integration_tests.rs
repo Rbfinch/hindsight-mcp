@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Integration tests for hindsight-mcp
 //!
 //! These tests verify full database round-trips and cross-crate data flow.

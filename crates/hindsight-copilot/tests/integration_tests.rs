@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Integration tests for hindsight-copilot
 //!
 //! These tests verify parsing of actual Copilot chat session JSON files.

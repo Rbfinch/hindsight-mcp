@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! MCP server implementation for hindsight-mcp
 //!
 //! This module provides the core MCP server that exposes development history

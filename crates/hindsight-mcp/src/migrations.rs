@@ -1,3 +1,6 @@
+// Copyright (c) 2026 - present Nicholas D. Crosbie
+// SPDX-License-Identifier: MIT
+
 //! Database migrations for hindsight-mcp
 //!
 //! This module provides schema migration functionality, allowing the database
