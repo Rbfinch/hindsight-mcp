@@ -345,31 +345,43 @@ curl -s "https://api.github.com/repos/Rbfinch/hindsight-mcp" | grep '"private"'
 
 **Status**: ✅ completed
 **Completed**: 2026-01-18
-**Goal**: Publish all workspace crates to crates.io
+**Goal**: Publish all workspace crates to crates.io from the **main branch**
 **Dependencies**: Phase 5 must complete successfully
+
+> **Important**: Always publish from the `main` branch to ensure the published code matches what users see on GitHub.
 
 #### Tasks
 
-1. **Login to crates.io** (~2 min)
+1. **Ensure you are on main branch** (~1 min)
+   - Run `git checkout main` if not already on main
+   - Verify with `git branch`
+
+2. **Login to crates.io** (~2 min)
    - Run `cargo login` if not already authenticated
    - Verify with `cargo owner --list hindsight-mcp` (will fail if not published, that's OK)
 
-2. **Final dry run** (~5 min)
+3. **Final dry run** (~5 min)
    - Run `cargo ws publish --dry-run` one more time
    - Review output carefully
 
-3. **Publish crates** (~10 min)
-   - Run `cargo ws publish` to publish all crates in dependency order
+4. **Publish crates** (~10 min)
+   - Run `cargo publish -p <crate>` for each crate in dependency order:
+     1. `cargo publish -p hindsight-copilot`
+     2. `cargo publish -p hindsight-git`
+     3. `cargo publish -p hindsight-tests`
+     4. `cargo publish -p hindsight-mcp`
    - Monitor output for any errors
-   - Crates will be published: hindsight-git → hindsight-tests → hindsight-copilot → hindsight-mcp
 
-4. **Verify publication** (~5 min)
+5. **Verify publication** (~5 min)
    - Check each crate on crates.io:
      - https://crates.io/crates/hindsight-git
      - https://crates.io/crates/hindsight-tests
      - https://crates.io/crates/hindsight-copilot
      - https://crates.io/crates/hindsight-mcp
    - Verify `cargo install hindsight-mcp` works
+
+6. **Return to dev branch** (~1 min)
+   - Run `git checkout dev`
 
 #### Validation Gate
 
