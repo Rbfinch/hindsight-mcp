@@ -204,16 +204,14 @@ impl GitRepo {
                 .unwrap_or_else(Utc::now);
 
             // Apply date filters
-            if let Some(since) = options.since {
-                if timestamp < since {
+            if let Some(since) = options.since
+                && timestamp < since {
                     continue;
                 }
-            }
-            if let Some(until) = options.until {
-                if timestamp > until {
+            if let Some(until) = options.until
+                && timestamp > until {
                     continue;
                 }
-            }
 
             // Extract commit data
             let commit = self.extract_commit(&git_commit, timestamp)?;

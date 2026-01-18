@@ -289,12 +289,11 @@ impl Ingestor {
             let commit = &commit_with_diff.commit;
 
             // Stop at last ingested SHA for incremental sync
-            if let Some(ref last) = last_sha {
-                if &commit.sha == last {
+            if let Some(ref last) = last_sha
+                && &commit.sha == last {
                     debug!(sha = %commit.sha, "Reached last ingested commit, stopping");
                     break;
                 }
-            }
 
             // Check if commit already exists
             if options.incremental
@@ -597,11 +596,10 @@ impl Ingestor {
                 );
 
                 // Add variables if present
-                if !m.variables.is_empty() {
-                    if let Ok(json) = serde_json::to_string(&m.variables) {
+                if !m.variables.is_empty()
+                    && let Ok(json) = serde_json::to_string(&m.variables) {
                         record = record.with_variables_json(json);
                     }
-                }
 
                 record
             })

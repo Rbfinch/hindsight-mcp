@@ -124,13 +124,12 @@ impl Config {
 
         // Validate database path is writable (check parent exists or can be created)
         let db_path = self.database_path();
-        if let Some(parent) = db_path.parent() {
-            if !parent.exists() {
+        if let Some(parent) = db_path.parent()
+            && !parent.exists() {
                 std::fs::create_dir_all(parent).map_err(|e| {
                     ConfigError::DatabaseDirectoryCreateFailed(parent.to_path_buf(), e)
                 })?;
             }
-        }
 
         Ok(())
     }

@@ -144,12 +144,11 @@ pub fn rollback_to(conn: &Connection, target_version: i32) -> Result<Vec<i32>, M
 
     // Find migrations to rollback (in reverse order)
     for migration in MIGRATIONS.iter().rev() {
-        if migration.version > target_version && migration.version <= current_version {
-            if let Some(down) = migration.down {
+        if migration.version > target_version && migration.version <= current_version
+            && let Some(down) = migration.down {
                 conn.execute_batch(down)?;
                 rolled_back.push(migration.version);
             }
-        }
     }
 
     Ok(rolled_back)
