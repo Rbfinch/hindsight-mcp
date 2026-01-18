@@ -12,7 +12,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/your-org/hindsight-mcp"
-rust-version = "1.85"
+rust-version = "1.89"
 authors = ["Nicholas D. Crosbie"]
 
 [workspace.dependencies]
