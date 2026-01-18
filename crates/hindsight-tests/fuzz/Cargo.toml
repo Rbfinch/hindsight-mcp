@@ -7,13 +7,31 @@ edition = "2024"
 [package.metadata]
 cargo-fuzz = true
 
+# Prevent cargo from including this in the parent workspace
+[workspace]
+
 [dependencies]
 libfuzzer-sys = "0.4"
 hindsight-tests = { path = ".." }
+arbitrary = { version = "1", features = ["derive"] }
 
 [[bin]]
-name = "fuzz_test_parser"
-path = "fuzz_targets/fuzz_test_parser.rs"
+name = "fuzz_nextest_run"
+path = "fuzz_targets/fuzz_nextest_run.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_nextest_list"
+path = "fuzz_targets/fuzz_nextest_list.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_streaming_parser"
+path = "fuzz_targets/fuzz_streaming_parser.rs"
 test = false
 doc = false
 bench = false

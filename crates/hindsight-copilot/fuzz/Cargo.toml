@@ -7,13 +7,25 @@ edition = "2024"
 [package.metadata]
 cargo-fuzz = true
 
+# Prevent cargo from including this in the parent workspace
+[workspace]
+
 [dependencies]
 libfuzzer-sys = "0.4"
 hindsight-copilot = { path = ".." }
+arbitrary = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [[bin]]
-name = "fuzz_copilot_parser"
-path = "fuzz_targets/fuzz_copilot_parser.rs"
+name = "fuzz_session_json"
+path = "fuzz_targets/fuzz_session_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lsp_trace"
+path = "fuzz_targets/fuzz_lsp_trace.rs"
 test = false
 doc = false
 bench = false

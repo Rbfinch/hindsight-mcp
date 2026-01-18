@@ -48,7 +48,7 @@ On first use, ingest your development history:
 
 ```bash
 # Option A: Run the server directly (it auto-creates the database)
-./target/release/hindsight-mcp -w /path/to/your/project
+hindsight-mcp -w /path/to/your/project
 ```
 
 Then ask Copilot to use the `hindsight_ingest` tool, or ingest happens automatically on first query.
@@ -69,21 +69,6 @@ Then ask Copilot to use the `hindsight_ingest` tool, or ingest happens automatic
 | `hindsight_activity_summary` | Aggregate stats for a time period |
 | `hindsight_commit_details` | Detailed commit info with linked test runs |
 | `hindsight_ingest` | Trigger data ingestion from git/copilot |
-
-### Claude Desktop Configuration
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
-
-```json
-{
-  "mcpServers": {
-    "hindsight": {
-      "command": "/path/to/hindsight-mcp",
-      "args": ["--workspace", "/path/to/your/project"]
-    }
-  }
-}
-```
 
 ## Usage
 
@@ -178,11 +163,6 @@ Arguments:
   commit (string): Filter by commit SHA - full or partial (optional)
 ```
 
-**Example queries:**
-- All failing tests: `hindsight_failing_tests()`
-- For a specific commit: `hindsight_failing_tests(commit: "a566594")`
-- Combined filters: `hindsight_failing_tests(workspace: "/path/to/project", commit: "abc123")`
-
 ### `hindsight_activity_summary`
 
 Get aggregate activity statistics for a time period.
@@ -249,7 +229,87 @@ NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-j
 
 **Note:** The `2>/dev/null` redirects compiler warnings/errors to avoid mixing them with the JSON output.
 
-#### Querying Failing Tests
+### GitHub Copilot Sessions
+
+Parses VS Code Copilot chat history:
+- User prompts and assistant responses
+- Attached files and selections
+- Session timestamps
+
+## Examples
+
+This section demonstrates common workflows using hindsight-mcp with Copilot.
+
+### Exploring Your Development Timeline
+
+Ask Copilot to show recent activity:
+
+```
+"What have I been working on recently?"
+"Show me the last 20 commits"
+"What happened in this project today?"
+```
+
+The `hindsight_timeline` tool returns a chronological view:
+
+```json
+[
+  {
+    "type": "commit",
+    "timestamp": "2026-01-18T10:30:00Z",
+    "sha": "abc123",
+    "message": "feat: add user authentication"
+  },
+  {
+    "type": "test_run",
+    "timestamp": "2026-01-18T10:35:00Z",
+    "passed": 42,
+    "failed": 0
+  },
+  {
+    "type": "copilot_session",
+    "timestamp": "2026-01-18T11:00:00Z",
+    "message_count": 5
+  }
+]
+```
+
+### Searching Your Codebase History
+
+Use natural language to search commits and Copilot conversations:
+
+```
+"Find commits about authentication"
+"Search for error handling changes"
+"What did I discuss about the database schema?"
+```
+
+The `hindsight_search` tool uses FTS5 full-text search:
+
+```
+hindsight_search(query: "authentication", source: "commits", limit: 10)
+```
+
+Returns matching commits with context:
+
+```json
+[
+  {
+    "sha": "abc123def",
+    "message": "feat: add user authentication with JWT tokens",
+    "author": "developer@example.com",
+    "timestamp": "2026-01-15T14:22:00Z"
+  },
+  {
+    "sha": "def456ghi",
+    "message": "fix: authentication token expiry handling",
+    "author": "developer@example.com",
+    "timestamp": "2026-01-16T09:15:00Z"
+  }
+]
+```
+
+### Querying Failing Tests
 
 After ingesting test results, query for failures using the MCP tool or Copilot:
 
@@ -267,7 +327,12 @@ The `hindsight_failing_tests` tool returns:
 - Failure output (panic messages, assertion errors)
 - Associated commit SHA (if linked)
 
-#### Complete Workflow: Linking Tests to Commits
+**Example queries:**
+- All failing tests: `hindsight_failing_tests()`
+- For a specific commit: `hindsight_failing_tests(commit: "a566594")`
+- Combined filters: `hindsight_failing_tests(workspace: "/path/to/project", commit: "abc123")`
+
+### Linking Tests to Commits
 
 This workflow demonstrates ingesting test results linked to a specific commit, then querying those failures:
 
@@ -334,12 +399,97 @@ This enables powerful queries like:
 - "Did the tests pass after this fix?"
 - "Show me all failures from yesterday's commits"
 
-### GitHub Copilot Sessions
+### Weekly Activity Summary
 
-Parses VS Code Copilot chat history:
-- User prompts and assistant responses
-- Attached files and selections
-- Session timestamps
+Get an overview of your development activity:
+
+```
+"Summarise my activity this week"
+"How productive was I last month?"
+"Give me stats for the past 30 days"
+```
+
+The `hindsight_activity_summary` tool aggregates statistics:
+
+```
+hindsight_activity_summary(days: 7)
+```
+
+Returns:
+
+```json
+{
+  "period_days": 7,
+  "commits": 23,
+  "test_runs": 45,
+  "tests_passed": 1250,
+  "tests_failed": 12,
+  "copilot_sessions": 8,
+  "copilot_messages": 67
+}
+```
+
+### Investigating a Specific Commit
+
+Get detailed information about any commit:
+
+```
+"Tell me about commit abc123"
+"What tests ran for the last commit?"
+"Show details for the authentication fix"
+```
+
+The `hindsight_commit_details` tool provides full context:
+
+```
+hindsight_commit_details(sha: "abc123")
+```
+
+Returns:
+
+```json
+{
+  "sha": "abc123def456789",
+  "message": "feat: add OAuth2 support for GitHub login",
+  "author": "developer@example.com",
+  "timestamp": "2026-01-17T15:30:00Z",
+  "parents": ["parent123"],
+  "test_runs": [
+    {
+      "timestamp": "2026-01-17T15:35:00Z",
+      "passed": 156,
+      "failed": 0,
+      "skipped": 2
+    }
+  ]
+}
+```
+
+### Refreshing Data
+
+Trigger manual ingestion when you want the latest data:
+
+```
+"Refresh the development history"
+"Ingest new commits"
+"Update the Copilot session data"
+```
+
+The `hindsight_ingest` tool supports selective ingestion:
+
+```
+# Ingest everything
+hindsight_ingest(workspace: "/path/to/project", source: "all")
+
+# Just git commits
+hindsight_ingest(workspace: "/path/to/project", source: "git")
+
+# Just Copilot sessions
+hindsight_ingest(workspace: "/path/to/project", source: "copilot")
+
+# Limit to recent items
+hindsight_ingest(workspace: "/path/to/project", source: "git", limit: 50)
+```
 
 ## Database Location
 
@@ -456,11 +606,14 @@ cargo bench --workspace
 
 ### Fuzzing
 
-Each crate has a `fuzz/` directory with fuzz targets. To run:
+The `hindsight-tests` and `hindsight-copilot` crates have fuzz targets for their parsing functions. To run:
 
 ```bash
-cd crates/<crate-name>
-cargo +nightly fuzz run <target-name>
+cd crates/hindsight-tests
+cargo +nightly fuzz run fuzz_nextest_run
+
+cd crates/hindsight-copilot
+cargo +nightly fuzz run fuzz_session_json
 ```
 
 ## License

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation**
+  - Restructured README with dedicated Examples section showcasing all MCP tools
+  - Added examples for `hindsight_timeline`, `hindsight_search`, `hindsight_activity_summary`, `hindsight_commit_details`, and `hindsight_ingest`
+  - Moved test querying examples to Examples section for better discoverability
+  - Removed Claude Desktop configuration (VS Code-only focus)
+  - Updated fuzzing documentation with specific targets and usage instructions
+
+- **Quality**
+  - Replaced placeholder fuzz targets with real implementations
+  - Added `fuzz_session_json` and `fuzz_lsp_trace` targets for hindsight-copilot
+  - Added `fuzz_nextest_run`, `fuzz_nextest_list`, and `fuzz_streaming_parser` targets for hindsight-tests
+  - Removed unused fuzz targets from hindsight-git and hindsight-mcp (not applicable)
+  - Added development/scripts/fuzz.sh for running fuzz tests
+
 ## [0.1.0] - 2026-01-18
 
 ### Added
