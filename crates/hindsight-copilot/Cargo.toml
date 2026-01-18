@@ -6,7 +6,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+homepage.workspace = true
 description = "GitHub Copilot log processing for hindsight-mcp"
+readme = "../../README.md"
+documentation = "https://docs.rs/hindsight-copilot"
+keywords = ["copilot", "ai", "parsing", "lsp", "development-tools"]
+categories = ["development-tools", "parser-implementations"]
 
 [lib]
 name = "hindsight_copilot"

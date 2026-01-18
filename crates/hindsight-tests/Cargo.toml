@@ -6,7 +6,16 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+homepage.workspace = true
 description = "Test log processing for hindsight-mcp"
+readme = "../../README.md"
+documentation = "https://docs.rs/hindsight-tests"
+keywords = ["testing", "nextest", "parsing", "test-results"]
+categories = [
+    "development-tools",
+    "development-tools::testing",
+    "parser-implementations",
+]
 
 [lib]
 name = "hindsight_tests"

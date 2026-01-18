@@ -6,7 +6,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+homepage.workspace = true
 description = "Git log processing for hindsight-mcp"
+readme = "../../README.md"
+documentation = "https://docs.rs/hindsight-git"
+keywords = ["git", "parsing", "commit", "history", "development-tools"]
+categories = ["development-tools", "parser-implementations"]
 
 [lib]
 name = "hindsight_git"

@@ -6,8 +6,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+homepage.workspace = true
 description = "MCP server bridging AI and development history"
+readme = "../../README.md"
+documentation = "https://docs.rs/hindsight-mcp"
 keywords = ["mcp", "ai", "development-history", "rust", "nextest"]
+categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
 name = "hindsight-mcp"
