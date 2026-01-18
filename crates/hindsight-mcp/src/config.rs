@@ -86,8 +86,16 @@ pub enum Command {
     ///   hindsight-mcp test -p my-crate        # Test specific package
     ///   hindsight-mcp test --dry-run          # Preview without ingesting
     ///   hindsight-mcp test --stdin            # Read from stdin (CI mode)
-    #[command(after_help = "Requires cargo-nextest to be installed.\n\
-        Install with: cargo install cargo-nextest")]
+    #[command(after_help = "EXAMPLES:\n    \
+        hindsight-mcp test                      Run all tests and ingest\n    \
+        hindsight-mcp test -p my-crate          Test specific package\n    \
+        hindsight-mcp test -p a -p b            Test multiple packages\n    \
+        hindsight-mcp test --dry-run            Preview without writing to database\n    \
+        hindsight-mcp test --stdin              Read nextest JSON from stdin\n    \
+        hindsight-mcp test -- --retries 2       Pass extra args to nextest\n\n\
+        REQUIREMENTS:\n    \
+        Requires cargo-nextest: cargo install cargo-nextest\n    \
+        More info: https://nexte.st/book/installation.html")]
     Test {
         /// Package(s) to test (passed to cargo nextest --package)
         #[arg(short, long)]

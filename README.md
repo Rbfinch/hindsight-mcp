@@ -99,7 +99,8 @@ Then ask Copilot to use the `hindsight_ingest` tool, or ingest happens automatic
 hindsight-mcp [OPTIONS] [COMMAND]
 
 Commands:
-  ingest    Ingest data from various sources (e.g., test results)
+  test      Run tests and ingest results (recommended)
+  ingest    Ingest data from stdin (advanced)
   help      Print help for commands
 
 Options:
@@ -129,9 +130,46 @@ Options:
 | `HINDSIGHT_DATABASE` | Path to SQLite database (alternative to `--database`) |
 | `HINDSIGHT_WORKSPACE` | Default workspace path (alternative to `--workspace`) |
 
-### Ingest Subcommand
+### Test Subcommand (Recommended)
 
-The `ingest` command imports test results from stdin:
+The `test` command runs tests and ingests results in one step:
+
+```
+hindsight-mcp test [OPTIONS] [-- <NEXTEST_ARGS>...]
+
+Options:
+  -p, --package <PKG>     Package(s) to test
+      --bin <BIN>         Binary(ies) to run
+  -E, --filter <EXPR>     Filter tests by expression
+      --stdin             Read JSON from stdin (CI mode)
+      --dry-run           Preview without database writes
+      --no-commit         Don't link to git commit
+      --commit <SHA>      Explicit commit SHA to link
+      --show-output       Show test output in terminal
+  -h, --help              Print help
+```
+
+**Examples:**
+```bash
+# Run all tests and ingest results
+hindsight-mcp test
+
+# Test specific package
+hindsight-mcp test -p my-crate
+
+# Test multiple packages
+hindsight-mcp test -p crate-a -p crate-b
+
+# Preview what would be ingested
+hindsight-mcp test --dry-run
+
+# Pass extra args to nextest
+hindsight-mcp test -- --retries 2
+```
+
+### Ingest Subcommand (Advanced)
+
+The `ingest` command imports test results from stdin for custom workflows:
 
 ```
 hindsight-mcp ingest [OPTIONS]
@@ -144,9 +182,12 @@ Options:
 
 **Example:**
 ```bash
+# For custom nextest invocations or CI pipelines
 NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json | \
   hindsight-mcp ingest --tests --commit $(git rev-parse HEAD)
 ```
+
+> **Note:** For most use cases, prefer `hindsight-mcp test` which handles everything automatically.
 
 ## MCP Tools
 
@@ -232,23 +273,37 @@ Ingests cargo-nextest output:
 
 #### Ingesting Test Results
 
-Test results require piping nextest JSON output to the CLI:
+The recommended way to ingest test results is using the `test` subcommand:
 
 ```bash
-# Run tests and ingest results
-NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
-  hindsight-mcp --database ~/.hindsight/hindsight.db --workspace /path/to/project ingest --tests
+# Run all tests and ingest (recommended)
+hindsight-mcp test
 
-# Ingest specific test targets
-NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --package my-crate --message-format libtest-json 2>/dev/null | \
-  hindsight-mcp --database ~/.hindsight/hindsight.db --workspace /path/to/project ingest --tests
+# Test specific package
+hindsight-mcp test -p my-crate
 
-# Associate test run with a specific commit
-NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
-  hindsight-mcp --workspace /path/to/project ingest --tests --commit abc123def
+# See what would be ingested without writing to database
+hindsight-mcp test --dry-run
 ```
 
-**Note:** The `2>/dev/null` redirects compiler warnings/errors to avoid mixing them with the JSON output.
+The `test` subcommand automatically:
+- Spawns `cargo nextest` with the correct flags
+- Sets required environment variables
+- Suppresses noisy stderr output
+- Auto-detects the current git commit
+- Ingests results to the database
+
+**For CI pipelines or custom nextest invocations**, use the `ingest` command:
+
+```bash
+# Pipe from custom nextest invocation
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
+  hindsight-mcp ingest --tests --commit $(git rev-parse HEAD)
+
+# Or use test subcommand with --stdin
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
+  hindsight-mcp test --stdin
+```
 
 ### GitHub Copilot Sessions
 
@@ -365,6 +420,10 @@ git rev-parse HEAD
 
 **Step 2: Run tests and ingest with commit linkage**
 ```bash
+# New recommended approach (auto-detects commit)
+hindsight-mcp test
+
+# Or with explicit commit (legacy approach)
 NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
   hindsight-mcp --workspace /path/to/project ingest --tests --commit a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6
 ```

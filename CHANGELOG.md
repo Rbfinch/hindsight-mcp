@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-01-19
+
+### Added
+
+- **New `test` subcommand** - Run tests and ingest results in one command
+  - Wraps `cargo-nextest` with correct flags and environment variables
+  - Auto-detects workspace from current directory
+  - Auto-detects current git commit for test run linking
+  - `--package`, `--bin`, `--filter` flags for test targeting
+  - `--dry-run` mode to preview without database writes
+  - `--stdin` mode for CI pipelines and custom workflows
+  - `--show-output` to see test progress in real-time
+  - `--no-commit` and `--commit <SHA>` for commit control
+  - Pass-through args to nextest via `-- <args>`
+
+### Changed
+
+- **Documentation**
+  - Added `test` subcommand to CLI reference in README
+  - Updated "Ingesting Test Results" section with new workflow
+  - Added examples for `test` subcommand usage
+  - Marked `ingest` command as advanced/legacy approach
+
 ## [0.1.2] - 2026-01-18
 
 ### Changed

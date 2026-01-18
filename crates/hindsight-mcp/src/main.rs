@@ -496,6 +496,18 @@ async fn run_test(
     // Parse and display results
     let summary = hindsight_tests::parse_run_output(&json_output)?;
 
+    // Warn if no tests were found
+    if summary.results.is_empty() {
+        warn!("No test results found in nextest output");
+        eprintln!(
+            "Warning: No tests were found.\n\
+             This could mean:\n  \
+             - No tests match the filter/package criteria\n  \
+             - The project has no tests defined\n  \
+             - Tests failed to compile (use --show-output to see errors)"
+        );
+    }
+
     if dry_run {
         // Dry-run mode: display what would be ingested
         println!("Dry-run mode - no data will be written to database\n");
