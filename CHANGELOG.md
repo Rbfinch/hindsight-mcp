@@ -20,12 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--no-commit` and `--commit <SHA>` for commit control
   - Pass-through args to nextest via `-- <args>`
 
+- **Project logo** - Added hindsight-logo.png to assets/
+
 ### Changed
 
 - **Documentation**
-  - Added `test` subcommand to CLI reference in README
+  - Streamlined README from 702 to 260 lines (~63% reduction)
+  - Consolidated MCP Tools into table with collapsible argument details
+  - Added `test` subcommand to CLI reference
+  - Moved Development sections into collapsible `<details>` tags
   - Updated "Ingesting Test Results" section with new workflow
-  - Added examples for `test` subcommand usage
   - Marked `ingest` command as advanced/legacy approach
 
 ## [0.1.2] - 2026-01-18
