@@ -243,6 +243,14 @@ impl Ingestor {
         &self.db
     }
 
+    /// Consume the ingestor and return the owned database
+    ///
+    /// This is useful when you need to transfer ownership of the database
+    /// after ingestion is complete.
+    pub fn into_database(self) -> Database {
+        self.db
+    }
+
     // ========================================================================
     // Git Ingestion
     // ========================================================================
