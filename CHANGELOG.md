@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-01-19
+
+### Fixed
+
+- **Logo display on crates.io** - Changed logo reference from relative path to absolute GitHub raw URL so it displays correctly on crates.io
+
 ## [0.1.3] - 2026-01-19
 
 ### Added
