@@ -1,4 +1,4 @@
-<img src="assets/hindsight-logo.png" alt="Hindsight Logo" width="120">
+<img src="https://raw.githubusercontent.com/Rbfinch/hindsight-mcp/main/assets/hindsight-logo.png" alt="Hindsight Logo" width="120">
 
 # hindsight-mcp
 
