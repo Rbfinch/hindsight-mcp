@@ -93,4 +93,7 @@ _freeze/
 *_files/
 *.qmd.lock
 
+# MCP Registry tokens (sensitive)
+.mcpregistry_*
+
 /development/
