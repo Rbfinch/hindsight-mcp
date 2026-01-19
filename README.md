@@ -150,8 +150,8 @@ Git and Copilot data are ingested automatically. Test results require running `h
 hindsight-mcp [OPTIONS] [COMMAND]
 
 Commands:
+  ingest    Ingest data from various sources
   test      Run tests and ingest results
-  ingest    Ingest from stdin (advanced)
 
 Options:
   -d, --database <PATH>   Database path [default: ~/.hindsight/hindsight.db]
