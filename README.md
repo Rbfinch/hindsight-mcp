@@ -1,5 +1,7 @@
 <img src="https://raw.githubusercontent.com/Rbfinch/hindsight-mcp/main/assets/hindsight-logo.png" alt="Hindsight Logo" width="120">
 
+<!-- mcp-name: io.github.rbfinch/hindsight-mcp -->
+
 # hindsight-mcp
 
 An MCP server for AI-assisted coding that leverages development history.
