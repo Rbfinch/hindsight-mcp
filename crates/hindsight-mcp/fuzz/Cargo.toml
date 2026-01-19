@@ -1,0 +1,41 @@
+[package]
+name = "hindsight-mcp-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+serde_json = "1.0"
+
+[dependencies.hindsight-mcp]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_tool_input"
+path = "fuzz_targets/fuzz_tool_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_json_parsing"
+path = "fuzz_targets/fuzz_json_parsing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_search_query"
+path = "fuzz_targets/fuzz_search_query.rs"
+test = false
+doc = false
+bench = false

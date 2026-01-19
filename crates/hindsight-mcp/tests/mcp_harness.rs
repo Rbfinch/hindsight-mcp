@@ -120,8 +120,23 @@ impl McpTestHarness {
         handlers::handle_commit_details(&self.db, Some(args))
     }
 
-    // Note: handle_ingest requires ownership of the database, so we provide
-    // a different approach for testing ingestion
+    /// Invoke the hindsight_ingest tool (consumes harness since ingest needs DB ownership)
+    #[allow(dead_code)]
+    pub fn ingest(
+        self,
+        source: &str,
+        workspace: &str,
+        incremental: bool,
+        limit: Option<usize>,
+    ) -> Result<handlers::IngestResponse, HandlerError> {
+        let args = build_args(json!({
+            "source": source,
+            "workspace": workspace,
+            "incremental": incremental,
+            "limit": limit
+        }));
+        handlers::handle_ingest(self.db, Some(args))
+    }
 
     // ========================================================================
     // Raw JSON Invocations (for edge case testing)
