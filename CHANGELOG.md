@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-01-19
+
+### Added
+
+- **Comprehensive test suite** - 569 new tests across all components
+  - CLI global flag tests (164 tests) - database, workspace, logging flags
+  - Ingest subcommand tests (39 tests) - stdin, commit linking, validation
+  - Test subcommand tests (55 tests) - nextest integration, dry-run, filters
+  - MCP tool handler tests (256 tests) - all 6 tools with edge cases
+  - Property-based and fuzz tests (30 tests) - robustness testing
+  - End-to-end workflow tests (15 tests) - real-world scenarios
+
+- **Test infrastructure** - Reusable fixtures and harnesses
+  - `fixtures.rs` - Sample data generators and test database helpers
+  - `mcp_harness.rs` - Direct MCP tool handler testing
+  - `test_utils.rs` - Temp directory and git repo scaffolding
+
+- **New API** - `Ingestor::into_database()` method for transferring database ownership
+
+### Changed
+
+- Total test count increased from 279 to 944 tests (238% increase)
+
 ## [0.1.4] - 2026-01-19
 
 ### Fixed
