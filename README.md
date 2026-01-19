@@ -1,36 +1,35 @@
+<img src="assets/hindsight-logo.png" alt="Hindsight Logo" width="150">
+
 # hindsight-mcp
 
 An MCP server for AI-assisted coding that leverages development history.
 
 ## Overview
 
-**hindsight-mcp** consolidates various "development data" stored locally (git logs, nextest test results, and GitHub Copilot logs) into a well-structured, searchable SQLite database, making it accessible to an AI assistant through MCP tool calls within VS Code. It is designed to help Rust developers and an AI assistant gain insights into their coding history, find relevant information quickly, and improve productivity by providing context-aware assistance.
+**hindsight-mcp** consolidates development data (git logs, test results, and GitHub Copilot sessions) into a searchable SQLite database, making it accessible to AI assistants through MCP tool calls in VS Code.
+
+**Key Features:**
+- Full-text search across commits and Copilot conversations
+- Track test results linked to specific commits
+- Activity summaries and timeline views
+- Automatic git and Copilot session ingestion
 
 ## Quick Start
 
 ### Prerequisites
 
-- **VS Code v1.99+** — MCP server support requires a recent version of VS Code
+- **VS Code v1.99+** with GitHub Copilot
+- **cargo-nextest** (for test ingestion): `cargo install cargo-nextest`
 
 ### Installation
 
-**Option A: Install from crates.io** (recommended)
 ```bash
 cargo install hindsight-mcp
 ```
 
-**Option B: Build from source**
-```bash
-git clone https://github.com/Rbfinch/hindsight-mcp.git
-cd hindsight-mcp
-cargo build --release
-
-# The binary is at ./target/release/hindsight-mcp
-```
-
 ### Configure VS Code
 
-Add to `.vscode/mcp.json` in your project:
+Create `.vscode/mcp.json` in your project:
 
 ```json
 {
@@ -44,95 +43,128 @@ Add to `.vscode/mcp.json` in your project:
 }
 ```
 
-> **Note:** If installed via `cargo install`, `hindsight-mcp` will be in your PATH. Otherwise, use the full path to the binary.
+### Verify Setup
 
-### Starting the Server
+1. Open VS Code Command Palette (`Cmd+Shift+P`)
+2. Run **"MCP: List Servers"**
+3. Confirm `hindsight` is listed
+4. In Copilot Chat, switch to **Agent** mode
+5. Ask: *"What have I been working on recently?"*
 
-The hindsight-mcp server starts automatically when VS Code loads your project with the `.vscode/mcp.json` configuration. You can verify it's running:
+That's it! Copilot will use hindsight tools to answer questions about your development history.
 
-1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-2. Type **"MCP: List Servers"** and select it
-3. You should see `hindsight` listed with a running status
+## MCP Tools
 
-### Enabling Hindsight Tools in Copilot Chat
+| Tool | Purpose | Example Prompt |
+|------|---------|----------------|
+| `hindsight_timeline` | Chronological activity view | "Show recent commits and test runs" |
+| `hindsight_search` | Full-text search | "Find commits about authentication" |
+| `hindsight_failing_tests` | Query test failures | "What tests are failing?" |
+| `hindsight_activity_summary` | Aggregate stats | "Summarise my week" |
+| `hindsight_commit_details` | Commit info with tests | "Details for commit abc123" |
+| `hindsight_ingest` | Trigger data refresh | "Refresh development history" |
 
-To access hindsight tools, you need to use Agent mode in Copilot Chat:
+<details>
+<summary><strong>Tool Arguments Reference</strong></summary>
 
-1. In the Copilot Chat window, look for the dropdown menu at the top (it might say "Ask" or "Chat")
-2. Change it to **Agent** or **Edit**
-3. The tools icon should now appear in the bottom-left or bottom-right corner of the chat input box
-4. Click the tools icon to verify hindsight tools are available
+### hindsight_timeline
+- `limit` (int): Max events, default 50
+- `workspace` (string): Filter by path
 
-### First Run
+### hindsight_search
+- `query` (string): Search query (required)
+- `source` (string): "all", "commits", or "messages"
+- `limit` (int): Max results, default 20
 
-On first use, ingest your development history:
+### hindsight_failing_tests
+- `limit` (int): Max tests, default 50
+- `workspace` (string): Filter by path
+- `commit` (string): Filter by SHA
+
+### hindsight_activity_summary
+- `days` (int): Days to summarise, default 7
+
+### hindsight_commit_details
+- `sha` (string): Commit SHA (required)
+
+### hindsight_ingest
+- `workspace` (string): Path to ingest (required)
+- `source` (string): "git", "copilot", or "all"
+- `incremental` (bool): Only new data, default true
+- `limit` (int): Max items
+
+</details>
+
+## Test Ingestion
+
+Run tests and automatically ingest results:
 
 ```bash
-# Option A: Run the server directly (it auto-creates the database)
-hindsight-mcp -w /path/to/your/project
+# Run all tests and ingest
+hindsight-mcp test
+
+# Test specific package
+hindsight-mcp test -p my-crate
+
+# Preview without writing to database
+hindsight-mcp test --dry-run
 ```
 
-Then ask Copilot to use the `hindsight_ingest` tool, or ingest happens automatically on first query.
+The `test` command automatically:
+- Spawns `cargo nextest` with correct flags
+- Auto-detects the current git commit
+- Ingests results to the database
 
-**That's it!** You can now ask Copilot questions like:
-- "What have I been working on recently?" → uses `hindsight_timeline`
-- "Find commits about authentication" → uses `hindsight_search`
-- "What tests are failing?" → uses `hindsight_failing_tests`
-- "Summarise my activity this week" → uses `hindsight_activity_summary`
+<details>
+<summary><strong>CI / Advanced Usage</strong></summary>
 
-### Available Tools
+For CI pipelines or custom nextest invocations:
 
-| Tool | Purpose |
-|------|---------|
-| `hindsight_timeline` | Chronological view of commits, tests, Copilot sessions |
-| `hindsight_search` | Full-text search across commits and messages |
-| `hindsight_failing_tests` | Currently failing tests from recent runs |
-| `hindsight_activity_summary` | Aggregate stats for a time period |
-| `hindsight_commit_details` | Detailed commit info with linked test runs |
-| `hindsight_ingest` | Trigger data ingestion from git/copilot |
+```bash
+# Using stdin mode
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run \
+  --message-format libtest-json 2>/dev/null | \
+  hindsight-mcp test --stdin
 
-## Usage
+# Using ingest command with explicit commit
+NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run \
+  --message-format libtest-json 2>/dev/null | \
+  hindsight-mcp ingest --tests --commit $(git rev-parse HEAD)
+```
 
-### Command Line Options
+</details>
+
+## Data Sources
+
+| Source | Data Collected |
+|--------|----------------|
+| **Git** | Commits (SHA, author, message, timestamp, parents) |
+| **Tests** | Run metadata, outcomes, durations, failure output |
+| **Copilot** | Chat sessions, prompts, responses, attached files |
+
+Git and Copilot data are ingested automatically. Test results require running `hindsight-mcp test`.
+
+## CLI Reference
 
 ```
 hindsight-mcp [OPTIONS] [COMMAND]
 
 Commands:
-  test      Run tests and ingest results (recommended)
-  ingest    Ingest data from stdin (advanced)
-  help      Print help for commands
+  test      Run tests and ingest results
+  ingest    Ingest from stdin (advanced)
 
 Options:
-  -d, --database <PATH>   Path to SQLite database file
-                          [env: HINDSIGHT_DATABASE]
-                          [default: ~/.hindsight/hindsight.db]
-
-  -w, --workspace <PATH>  Default workspace path for queries
-                          [env: HINDSIGHT_WORKSPACE]
-                          [default: current directory]
-
-  -v, --verbose           Enable verbose logging (debug level)
-
-  -q, --quiet             Suppress info-level logs (errors/warnings only)
-
-      --skip-init         Skip database initialization/migration check
-
+  -d, --database <PATH>   Database path [default: ~/.hindsight/hindsight.db]
+  -w, --workspace <PATH>  Workspace path [default: current directory]
+  -v, --verbose           Debug logging
+  -q, --quiet             Errors only
+      --skip-init         Skip database init
   -h, --help              Print help
-
   -V, --version           Print version
 ```
 
-### Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `HINDSIGHT_DATABASE` | Path to SQLite database (alternative to `--database`) |
-| `HINDSIGHT_WORKSPACE` | Default workspace path (alternative to `--workspace`) |
-
-### Test Subcommand (Recommended)
-
-The `test` command runs tests and ingests results in one step:
+<details>
+<summary><strong>Test Subcommand Options</strong></summary>
 
 ```
 hindsight-mcp test [OPTIONS] [-- <NEXTEST_ARGS>...]
@@ -140,551 +172,78 @@ hindsight-mcp test [OPTIONS] [-- <NEXTEST_ARGS>...]
 Options:
   -p, --package <PKG>     Package(s) to test
       --bin <BIN>         Binary(ies) to run
-  -E, --filter <EXPR>     Filter tests by expression
-      --stdin             Read JSON from stdin (CI mode)
-      --dry-run           Preview without database writes
-      --no-commit         Don't link to git commit
-      --commit <SHA>      Explicit commit SHA to link
-      --show-output       Show test output in terminal
-  -h, --help              Print help
+  -E, --filter <EXPR>     Filter expression
+      --stdin             Read from stdin
+      --dry-run           Preview only
+      --no-commit         Do not link to commit
+      --commit <SHA>      Explicit commit SHA
+      --show-output       Show test output
 ```
 
-**Examples:**
-```bash
-# Run all tests and ingest results
-hindsight-mcp test
+</details>
 
-# Test specific package
-hindsight-mcp test -p my-crate
+### Environment Variables
 
-# Test multiple packages
-hindsight-mcp test -p crate-a -p crate-b
+| Variable | Description |
+|----------|-------------|
+| `HINDSIGHT_DATABASE` | Database path |
+| `HINDSIGHT_WORKSPACE` | Default workspace |
 
-# Preview what would be ingested
-hindsight-mcp test --dry-run
+### Database Location
 
-# Pass extra args to nextest
-hindsight-mcp test -- --retries 2
-```
-
-### Ingest Subcommand (Advanced)
-
-The `ingest` command imports test results from stdin for custom workflows:
-
-```
-hindsight-mcp ingest [OPTIONS]
-
-Options:
-      --tests             Ingest test results from stdin (nextest JSON format)
-      --commit <SHA>      Git commit SHA to associate with test results
-  -h, --help              Print help
-```
-
-**Example:**
-```bash
-# For custom nextest invocations or CI pipelines
-NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json | \
-  hindsight-mcp ingest --tests --commit $(git rev-parse HEAD)
-```
-
-> **Note:** For most use cases, prefer `hindsight-mcp test` which handles everything automatically.
-
-## MCP Tools
-
-hindsight-mcp exposes 6 tools for AI-assisted development:
-
-### `hindsight_timeline`
-
-Get a chronological view of development activity (commits, test runs, Copilot sessions).
-
-```
-Arguments:
-  limit (integer): Maximum events to return (default: 50)
-  workspace (string): Filter by workspace path (optional)
-```
-
-### `hindsight_search`
-
-Full-text search across commits and Copilot messages using FTS5 syntax.
-
-```
-Arguments:
-  query (string): Search query (required)
-  source (string): "all", "commits", or "messages" (default: "all")
-  limit (integer): Maximum results (default: 20)
-```
-
-### `hindsight_failing_tests`
-
-Get currently failing tests from recent test runs, optionally filtered by commit.
-
-```
-Arguments:
-  limit (integer): Maximum tests to return (default: 50)
-  workspace (string): Filter by workspace (optional)
-  commit (string): Filter by commit SHA - full or partial (optional)
-```
-
-### `hindsight_activity_summary`
-
-Get aggregate activity statistics for a time period.
-
-```
-Arguments:
-  days (integer): Number of days to summarize (default: 7)
-```
-
-### `hindsight_commit_details`
-
-Get detailed information about a specific commit including linked test runs.
-
-```
-Arguments:
-  sha (string): Full or partial commit SHA (required)
-```
-
-### `hindsight_ingest`
-
-Trigger data ingestion from sources (git, Copilot).
-
-```
-Arguments:
-  workspace (string): Workspace path to ingest (required)
-  source (string): "git", "copilot", or "all" (default: "all")
-  incremental (boolean): Only ingest new data (default: true)
-  limit (integer): Max items to ingest (optional)
-```
-
-## Data Sources
-
-### Git Commits
-
-Automatically ingests commit history including:
-- SHA, author, message, timestamp
-- Parent commit references
-- Optional diff statistics
-
-### Test Results
-
-Ingests cargo-nextest output:
-- Test run metadata (pass/fail counts)
-- Individual test outcomes
-- Duration and output capture
-
-#### Ingesting Test Results
-
-The recommended way to ingest test results is using the `test` subcommand:
-
-```bash
-# Run all tests and ingest (recommended)
-hindsight-mcp test
-
-# Test specific package
-hindsight-mcp test -p my-crate
-
-# See what would be ingested without writing to database
-hindsight-mcp test --dry-run
-```
-
-The `test` subcommand automatically:
-- Spawns `cargo nextest` with the correct flags
-- Sets required environment variables
-- Suppresses noisy stderr output
-- Auto-detects the current git commit
-- Ingests results to the database
-
-**For CI pipelines or custom nextest invocations**, use the `ingest` command:
-
-```bash
-# Pipe from custom nextest invocation
-NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
-  hindsight-mcp ingest --tests --commit $(git rev-parse HEAD)
-
-# Or use test subcommand with --stdin
-NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
-  hindsight-mcp test --stdin
-```
-
-### GitHub Copilot Sessions
-
-Parses VS Code Copilot chat history:
-- User prompts and assistant responses
-- Attached files and selections
-- Session timestamps
-
-## Examples
-
-This section demonstrates common workflows using hindsight-mcp with Copilot.
-
-### Exploring Your Development Timeline
-
-Ask Copilot to show recent activity:
-
-```
-"What have I been working on recently?"
-"Show me the last 20 commits"
-"What happened in this project today?"
-```
-
-The `hindsight_timeline` tool returns a chronological view:
-
-```json
-[
-  {
-    "type": "commit",
-    "timestamp": "2026-01-18T10:30:00Z",
-    "sha": "abc123",
-    "message": "feat: add user authentication"
-  },
-  {
-    "type": "test_run",
-    "timestamp": "2026-01-18T10:35:00Z",
-    "passed": 42,
-    "failed": 0
-  },
-  {
-    "type": "copilot_session",
-    "timestamp": "2026-01-18T11:00:00Z",
-    "message_count": 5
-  }
-]
-```
-
-### Searching Your Codebase History
-
-Use natural language to search commits and Copilot conversations:
-
-```
-"Find commits about authentication"
-"Search for error handling changes"
-"What did I discuss about the database schema?"
-```
-
-The `hindsight_search` tool uses FTS5 full-text search:
-
-```
-hindsight_search(query: "authentication", source: "commits", limit: 10)
-```
-
-Returns matching commits with context:
-
-```json
-[
-  {
-    "sha": "abc123def",
-    "message": "feat: add user authentication with JWT tokens",
-    "author": "developer@example.com",
-    "timestamp": "2026-01-15T14:22:00Z"
-  },
-  {
-    "sha": "def456ghi",
-    "message": "fix: authentication token expiry handling",
-    "author": "developer@example.com",
-    "timestamp": "2026-01-16T09:15:00Z"
-  }
-]
-```
-
-### Querying Failing Tests
-
-After ingesting test results, query for failures using the MCP tool or Copilot:
-
-```
-# Ask Copilot:
-"What tests are failing?"
-"Show me the failing test output"
-"Which tests failed in the last run?"
-"What tests failed for commit abc123?"
-```
-
-The `hindsight_failing_tests` tool returns:
-- Test name and suite
-- Duration and timestamp
-- Failure output (panic messages, assertion errors)
-- Associated commit SHA (if linked)
-
-**Example queries:**
-- All failing tests: `hindsight_failing_tests()`
-- For a specific commit: `hindsight_failing_tests(commit: "a566594")`
-- Combined filters: `hindsight_failing_tests(workspace: "/path/to/project", commit: "abc123")`
-
-### Linking Tests to Commits
-
-This workflow demonstrates ingesting test results linked to a specific commit, then querying those failures:
-
-**Step 1: Get the current commit SHA**
-```bash
-git rev-parse HEAD
-# Output: a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6
-```
-
-**Step 2: Run tests and ingest with commit linkage**
-```bash
-# New recommended approach (auto-detects commit)
-hindsight-mcp test
-
-# Or with explicit commit (legacy approach)
-NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --message-format libtest-json 2>/dev/null | \
-  hindsight-mcp --workspace /path/to/project ingest --tests --commit a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6
-```
-
-Output:
-```
-Ingested 6 test results in 1 test run(s)
-```
-
-**Step 3: Query failing tests for that commit**
-
-Using the MCP tool (via Copilot or directly):
-```
-hindsight_failing_tests(commit: "a5665945")
-```
-
-Returns failures linked to that specific commit:
-```json
-[
-  {
-    "commit_sha": "a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6",
-    "full_name": "test_assertion_failure",
-    "duration_ms": 8,
-    "output_json": "assertion `left == right` failed: left: 2, right: 3"
-  },
-  {
-    "commit_sha": "a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6",
-    "full_name": "test_panic_failure",
-    "duration_ms": 8,
-    "output_json": "panicked at: This test panics on purpose"
-  }
-]
-```
-
-**Step 4: View commit details with linked test runs**
-```
-hindsight_commit_details(sha: "a5665945")
-```
-
-Returns commit info including all associated test runs:
-```json
-{
-  "sha": "a5665945a0efb9f59fea1392dbdbdcc7e5ce48c6",
-  "message": "feat: add commit filter to hindsight_failing_tests",
-  "test_runs": [
-    { "passed": 2, "failed": 4, "timestamp": "2026-01-17T23:38:43Z" }
-  ]
-}
-```
-
-This enables powerful queries like:
-- "Which commit introduced these test failures?"
-- "Did the tests pass after this fix?"
-- "Show me all failures from yesterday's commits"
-
-### Weekly Activity Summary
-
-Get an overview of your development activity:
-
-```
-"Summarise my activity this week"
-"How productive was I last month?"
-"Give me stats for the past 30 days"
-```
-
-The `hindsight_activity_summary` tool aggregates statistics:
-
-```
-hindsight_activity_summary(days: 7)
-```
-
-Returns:
-
-```json
-{
-  "days": 7,
-  "commits": 23,
-  "test_runs": 45,
-  "copilot_sessions": 8,
-  "failing_tests": 12
-}
-```
-
-### Investigating a Specific Commit
-
-Get detailed information about any commit:
-
-```
-"Tell me about commit abc123"
-"What tests ran for the last commit?"
-"Show details for the authentication fix"
-```
-
-The `hindsight_commit_details` tool provides full context:
-
-```
-hindsight_commit_details(sha: "abc123")
-```
-
-Returns:
-
-```json
-{
-  "sha": "abc123def456789",
-  "message": "feat: add OAuth2 support for GitHub login",
-  "author": "developer@example.com",
-  "timestamp": "2026-01-17T15:30:00Z",
-  "parents": ["parent123"],
-  "test_runs": [
-    {
-      "timestamp": "2026-01-17T15:35:00Z",
-      "passed": 156,
-      "failed": 0,
-      "skipped": 2
-    }
-  ]
-}
-```
-
-### Refreshing Data
-
-Trigger manual ingestion when you want the latest data:
-
-```
-"Refresh the development history"
-"Ingest new commits"
-"Update the Copilot session data"
-```
-
-The `hindsight_ingest` tool supports selective ingestion:
-
-```
-# Ingest everything
-hindsight_ingest(workspace: "/path/to/project", source: "all")
-
-# Just git commits
-hindsight_ingest(workspace: "/path/to/project", source: "git")
-
-# Just Copilot sessions
-hindsight_ingest(workspace: "/path/to/project", source: "copilot")
-
-# Limit to recent items
-hindsight_ingest(workspace: "/path/to/project", source: "git", limit: 50)
-```
-
-## Database Location
-
-Default database path by platform:
-
-| Platform | Path |
-|----------|------|
+| Platform | Default Path |
+|----------|--------------|
 | macOS | `~/Library/Application Support/hindsight/hindsight.db` |
 | Linux | `~/.local/share/hindsight/hindsight.db` |
 | Windows | `%LOCALAPPDATA%\hindsight\hindsight.db` |
 
-Override with `--database` or `HINDSIGHT_DATABASE`.
-
 ## Troubleshooting
 
-### Server doesn't start
-
-1. Check the binary path is correct
-2. Verify write permissions for database directory
-3. Run with `--verbose` for debug logs:
-   ```bash
-   hindsight-mcp --verbose --database /tmp/test.db
-   ```
-
-### No data showing
-
-1. Run ingestion manually via the `hindsight_ingest` tool
-2. Ensure workspace path points to a git repository
-3. Check database exists: `ls ~/.hindsight/`
-
-### Logs interference
-
-The server logs to stderr to avoid interfering with MCP stdio transport. Use `--quiet` in production.
-
-## Dependencies
-
-hindsight-mcp bundles its native dependencies for ease of installation:
-
-| Dependency | Purpose | Notes |
-|------------|---------|-------|
-| `rusqlite` | SQLite database | Bundled; no system SQLite required |
-| `git2` | Git repository access | Uses bundled libgit2 |
-| `rust-mcp-sdk` | MCP protocol | Pure Rust |
-| `tokio` | Async runtime | Pure Rust |
-
-### System Requirements
-
-- **Rust**: 1.89 or later (for building from source)
-- **OS**: Linux, macOS, or Windows
-- **No additional system libraries required** — all native dependencies are bundled
-
-## Workspace Structure
-
-```
-hindsight/
-├── Cargo.toml              # Workspace manifest
-├── crates/
-│   ├── hindsight-mcp/      # Binary crate - MCP server
-│   ├── hindsight-git/      # Library - Git log processing
-│   ├── hindsight-tests/    # Library - Test result processing
-│   └── hindsight-copilot/  # Library - Copilot log processing
-```
-
-## Crates
-
-### hindsight-mcp (binary)
-The main MCP server that bridges AI and development history.
-- Dependencies: `rust-mcp-sdk`, `rusqlite`, `clap`, `tokio`
-
-### hindsight-git (library)
-Processes git logs for consumption by hindsight-mcp.
-- Dependencies: `git2`
-
-### hindsight-tests (library)
-Processes test logs (particularly from cargo-nextest).
-- Dependencies: `nextest-metadata`
-
-### hindsight-copilot (library)
-Processes GitHub Copilot logs and chat sessions.
-- Dependencies: `serde_json`, `lsp-types`, `tracing-subscriber`
+| Problem | Solution |
+|---------|----------|
+| Server does not start | Check binary path; run with `--verbose` |
+| No data showing | Run `hindsight_ingest` tool via Copilot |
+| Log interference | Use `--quiet` in production |
 
 ## Development
 
-This project uses [cargo-nextest](https://nexte.st/) as its test runner for faster, more reliable test execution.
-
-### Prerequisites
+<details>
+<summary><strong>Building from Source</strong></summary>
 
 ```bash
-# Install cargo-nextest (required for running tests)
+git clone https://github.com/Rbfinch/hindsight-mcp.git
+cd hindsight-mcp
+cargo build --release
+```
+
+</details>
+
+<details>
+<summary><strong>Running Tests</strong></summary>
+
+```bash
 cargo install cargo-nextest
-```
-
-### Building
-
-```bash
-cargo build --workspace
-```
-
-### Testing
-
-```bash
-# Run tests with nextest (recommended)
 cargo nextest run --workspace
-
-# Or use standard cargo test for doc tests
-cargo test --workspace --doc
 ```
 
-### Benchmarks
+</details>
 
-```bash
-cargo bench --workspace
+<details>
+<summary><strong>Workspace Structure</strong></summary>
+
+```
+hindsight/
+├── crates/
+│   ├── hindsight-mcp/      # MCP server binary
+│   ├── hindsight-git/      # Git log processing
+│   ├── hindsight-tests/    # Test result processing
+│   └── hindsight-copilot/  # Copilot session parsing
 ```
 
-### Fuzzing
+</details>
 
-The `hindsight-tests` and `hindsight-copilot` crates have fuzz targets for their parsing functions. To run:
+<details>
+<summary><strong>Fuzzing</strong></summary>
 
 ```bash
 cd crates/hindsight-tests
@@ -693,6 +252,8 @@ cargo +nightly fuzz run fuzz_nextest_run
 cd crates/hindsight-copilot
 cargo +nightly fuzz run fuzz_session_json
 ```
+
+</details>
 
 ## License
 
