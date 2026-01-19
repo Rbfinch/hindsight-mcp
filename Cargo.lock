@@ -680,7 +680,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hindsight-copilot"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "criterion",
@@ -698,7 +698,7 @@ dependencies = [
 
 [[package]]
 name = "hindsight-git"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "criterion",
@@ -714,7 +714,7 @@ dependencies = [
 
 [[package]]
 name = "hindsight-mcp"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "hindsight-tests"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "criterion",
@@ -1064,9 +1064,9 @@ dependencies = [
 
 [[package]]
 name = "nextest-metadata"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eef2601bf9e6e4c5baf0e07da249f6b4c3c480b738463d69101292a3a05d7ad1"
+checksum = "f228be3a382ecd30a477ba685385ee8f0c4e1f7d9ec5c929cf44ffd79511c690"
 dependencies = [
  "camino",
  "nextest-workspace-hack",
@@ -1449,9 +1449,9 @@ dependencies = [
 
 [[package]]
 name = "rust-mcp-sdk"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc2e76d83baa6b323baa9cc1a6cbeb8430f1d1dbbe92c54b70244322572bc53d"
+checksum = "f26451e57e1872f1727e29b961cb2a1f7793c567a349aeb52b5b7716475dbf05"
 dependencies = [
  "async-trait",
  "base64",
@@ -1744,18 +1744,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.17"
+version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
+checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.17"
+version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913"
+checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
 dependencies = [
  "proc-macro2",
  "quote",

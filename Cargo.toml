@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 license = "MIT"
 license-file = "LICENSE.md"
@@ -24,8 +24,8 @@ hindsight-tests = { path = "crates/hindsight-tests", version = "0.1.0" }
 hindsight-copilot = { path = "crates/hindsight-copilot", version = "0.1.0" }
 
 # Error handling
-thiserror = "2.0.17"
-anyhow = "1.0"
+thiserror = "2.0.18"
+anyhow = "1.0.100"
 
 # Testing & benchmarking
 criterion = "0.8.1"
@@ -34,28 +34,28 @@ similar = "2.7.0"
 similar-asserts = "1.7.0"
 
 # CLI parsing
-clap = { version = "4.5", features = ["derive", "env"] }
+clap = { version = "4.5.54", features = ["derive", "env"] }
 
 # Date/time
-chrono = { version = "0.4.39", features = ["serde"] }
+chrono = { version = "0.4.43", features = ["serde"] }
 
 # Directory paths
-dirs = "6.0"
+dirs = "6.0.0"
 
 # Structured logging/tracing
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 # Serialization
-serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.135"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 
 # Async runtime
-tokio = { version = "1", features = ["full"] }
-async-trait = "0.1"
+tokio = { version = "1.49.0", features = ["full"] }
+async-trait = "0.1.89"
 
 # MCP SDK
-rust-mcp-sdk = { version = "0.8", default-features = false, features = [
+rust-mcp-sdk = { version = "0.8.2", default-features = false, features = [
     "server",
     "stdio",
 ] }
@@ -70,11 +70,11 @@ git2 = "0.20.3"
 lsp-types = "0.97.0"
 
 # Nextest for test result parsing
-nextest-metadata = "0.13.0"
-cargo-nextest = "0.9"
+nextest-metadata = "0.13.1"
+cargo-nextest = "0.9.123-b.1"
 
 # UUID generation
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.19.0", features = ["v4"] }
 
 # ============================================================================
 # Release Profile - Optimized for binary size and performance
