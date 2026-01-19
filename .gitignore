@@ -96,4 +96,12 @@ _freeze/
 # MCP Registry tokens (sensitive)
 .mcpregistry_*
 
+# Node.js / VS Code Extension
+node_modules/
+dist/
+out/
+*.vsix
+package-lock.json
+.vscode-test/
+
 /development/
